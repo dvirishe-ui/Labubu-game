@@ -3,13 +3,13 @@
  * Turns the equipped loadout into one flat set of gameplay modifiers that
  * Player, RunnerScene and IdleRewardManager consume.
  */
-import { CATALOG } from '../config/GachaDropTable.js';
+import { CATALOG, skinMultiplier } from '../config/GachaDropTable.js';
 import { RUNNER } from '../config/GameConfig.js';
 
 /**
  * @param {object} equipped  save.equipped ({ baseDoll, outfit, headwear, tail, shoes })
  * @returns {{
- *   doubleJump: boolean, maxJumps: number, floatyFall: boolean, attractRadius: number,
+ *   doubleJump: boolean, maxJumps: number, skinMultiplier: number, floatyFall: boolean, attractRadius: number,
  *   shieldCharges: number, coinMultiplier: number, jumpMultiplier: number,
  *   gravityMultiplier: number, idleBonus: number, ticketLuck: number, sources: string[]
  * }}
@@ -17,6 +17,8 @@ import { RUNNER } from '../config/GameConfig.js';
 export function computePerks(equipped = {}) {
   const perks = {
     doubleJump: true, // everyone can double jump (double tap)
+    // Rarer skins play with a score & coin multiplier (Legendary x1.5, Mystery x2).
+    skinMultiplier: skinMultiplier(equipped.baseDoll),
     maxJumps: 2,
     floatyFall: false,
     attractRadius: RUNNER.ATTRACT_DIST, // metres

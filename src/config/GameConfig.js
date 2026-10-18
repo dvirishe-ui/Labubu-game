@@ -107,7 +107,7 @@ export const RUNNER = {
 /** Word hunt: collect these letters during runs for a daily prize. */
 export const WORD_HUNT = {
   WORD: 'LABUBU',
-  REWARD: { popCoins: 300, blindBoxTickets: 1 }
+  REWARD: { popCoins: 300, blindBoxTickets: 1, gems: 20 }
 };
 
 /** Daily Lucky Spin wheel segments (weights are relative). */
@@ -116,9 +116,9 @@ export const LUCKY_SPIN = [
   { label: '1 Ticket', reward: { type: 'blindBoxTickets', amount: 1 }, weight: 16, color: 0xff8fb1 },
   { label: '100', reward: { type: 'popCoins', amount: 100 }, weight: 20, color: 0x6ee7a8 },
   { label: '2 Tickets', reward: { type: 'blindBoxTickets', amount: 2 }, weight: 6, color: 0x59b8ff },
-  { label: '200', reward: { type: 'popCoins', amount: 200 }, weight: 12, color: 0xb07cff },
+  { label: '20 Gems', reward: { type: 'gems', amount: 20 }, weight: 12, color: 0xb07cff },
   { label: 'Key!', reward: { type: 'goldenKeys', amount: 1 }, weight: 4, color: 0xff7a1a },
-  { label: '75', reward: { type: 'popCoins', amount: 75 }, weight: 22, color: 0x8fd3ff },
+  { label: '5 Gems', reward: { type: 'gems', amount: 5 }, weight: 22, color: 0x8fd3ff },
   { label: '500', reward: { type: 'popCoins', amount: 500 }, weight: 3, color: 0xe8324b }
 ];
 
@@ -127,11 +127,26 @@ export const ECONOMY = {
   TICKET_PRICE_COINS: 300,
   STARTING_COINS: 250,
   STARTING_TICKETS: 3,
+  STARTING_GEMS: 100,
   /** Coins refunded when you pull an item you already own (Pop Mart "dupe" swap). */
-  DUPLICATE_REFUND: { common: 25, rare: 60, epic: 150, secret: 500 },
+  DUPLICATE_REFUND: { common: 25, rare: 60, epic: 150, legendary: 300, secret: 600 },
   /** Golden keys granted on top of the refund for high-tier duplicates. */
-  DUPLICATE_KEYS: { common: 0, rare: 0, epic: 1, secret: 3 }
+  DUPLICATE_KEYS: { common: 0, rare: 0, epic: 1, legendary: 1, secret: 2 },
+  /** Gems granted for Legendary / Mystery duplicates. */
+  DUPLICATE_GEMS: { common: 0, rare: 0, epic: 0, legendary: 15, secret: 40 }
 };
+
+/**
+ * Gem bundles (real-money in-app purchases). In the web build these are shown
+ * but routed through PurchaseService, which only completes inside the native
+ * app with a configured store; gems are also earned free in-game.
+ */
+export const GEM_BUNDLES = [
+  { id: 'gems_80', gems: 80, price: '$0.99', label: 'Pile of Gems' },
+  { id: 'gems_500', gems: 500, price: '$4.99', label: 'Bag of Gems', bonus: '+25%' },
+  { id: 'gems_1200', gems: 1200, price: '$9.99', label: 'Chest of Gems', bonus: '+50%' },
+  { id: 'gems_2600', gems: 2600, price: '$19.99', label: 'Mountain of Gems', bonus: 'BEST VALUE' }
+];
 
 /** Idle tycoon tuning (see IdleRewardManager for the formula). */
 export const IDLE = {
@@ -169,7 +184,9 @@ export const COLORS = {
   secret: 0xffc93c
 };
 
-export const FONT = 'Trebuchet MS, Verdana, system-ui, sans-serif';
+/** Body font (Fredoka) and the chunky display font (Lilita One), bundled locally. */
+export const FONT = 'Fredoka, Trebuchet MS, Verdana, system-ui, sans-serif';
+export const FONT_DISPLAY = '"Lilita One", Fredoka, Trebuchet MS, system-ui, sans-serif';
 
 /** Names of the global gameplay events consumed by QuestManager & friends. */
 export const EVENTS = {

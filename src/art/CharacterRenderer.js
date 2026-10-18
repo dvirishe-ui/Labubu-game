@@ -409,6 +409,243 @@ function drawFurBall(ctx, cx, cy, pal) {
   ctx.globalAlpha = 1;
 }
 
+// ---------------------------------------------------------------------------- skin features
+
+/**
+ * Extra procedural details for premium skins (palette.features).
+ * layer 'back' = behind the body (wings, mane), 'head' = on the head after the
+ * face (eyepatch, bandana, horns, tiara...), 'body' = sparkles over everything.
+ * `front` is false for the over-the-shoulder runner view.
+ */
+function drawFeatures(ctx, pal, layer, front = true) {
+  const f = pal.features;
+  if (!f?.length) return;
+  const cx = front ? 66 : 64;
+  const cy = 66;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = 2.4;
+  const has = (k) => f.includes(k);
+
+  if (layer === 'back') {
+    if (has('dragon')) {
+      // Little bat wings behind the shoulders
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(64 + s * 10, 104);
+        ctx.quadraticCurveTo(64 + s * 46, 74, 64 + s * 56, 92);
+        ctx.lineTo(64 + s * 46, 100);
+        ctx.lineTo(64 + s * 44, 112);
+        ctx.lineTo(64 + s * 32, 110);
+        ctx.lineTo(64 + s * 26, 120);
+        ctx.closePath();
+        ctx.fillStyle = shade(pal.shade, -10);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(64 + s * 14, 104);
+        ctx.lineTo(64 + s * 44, 86);
+        ctx.stroke();
+        ctx.strokeStyle = OUTLINE;
+      }
+    }
+    if (has('mane')) {
+      const colors = ['#ff6fae', '#ffd23f', '#6ee7a8', '#59b8ff', '#b07cff'];
+      colors.forEach((c, i) => {
+        ctx.beginPath();
+        ctx.ellipse(cx - 30 + i * 3, cy - 18 + i * 12, 11, 8, -0.5, 0, Math.PI * 2);
+        ctx.fillStyle = c;
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+  }
+
+  if (layer === 'head') {
+    if (has('metallic')) {
+      // Polished-gold glints on the fur
+      const g = ctx.createLinearGradient(cx - 30, cy - 30, cx + 20, cy + 10);
+      g.addColorStop(0, 'rgba(255,255,255,0.65)');
+      g.addColorStop(0.4, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (has('frost')) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      const rnd = seeded(23);
+      for (let i = 0; i < 10; i++) {
+        const a = Math.PI * (1.05 + rnd() * 0.9);
+        const r = 26 + rnd() * 8;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1.5 + rnd() * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (has('seeds')) {
+      ctx.fillStyle = '#ffe27a';
+      const rnd = seeded(5);
+      for (let i = 0; i < 16; i++) {
+        const a = rnd() * Math.PI * 2;
+        const r = 18 + rnd() * 12;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        if (front && Math.abs(x - cx - 5) < 26 && Math.abs(y - cy - 8) < 20) continue; // not on the face
+        ctx.beginPath();
+        ctx.ellipse(x, y, 1.6, 2.6, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (has('leafcap')) {
+      for (let i = -2; i <= 2; i++) {
+        ctx.save();
+        ctx.translate(cx, cy - 30);
+        ctx.rotate(i * 0.5);
+        ctx.beginPath();
+        ctx.ellipse(0, -9, 6, 12, 0, 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 ? '#3f9e3a' : '#5fc24f';
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle = '#2f7a2a';
+      ctx.fillRect(cx - 2, cy - 50, 4, 10);
+    }
+    if (has('bandana')) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 33, cy - 8);
+      ctx.quadraticCurveTo(cx, cy - 50, cx + 33, cy - 8);
+      ctx.quadraticCurveTo(cx, cy - 30, cx - 33, cy - 8);
+      ctx.closePath();
+      ctx.fillStyle = pal.accent;
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      for (const [dx, dy] of [[-14, -20], [0, -27], [14, -20]]) {
+        ctx.beginPath();
+        ctx.arc(cx + dx, cy + dy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // knot tails
+      const kx = front ? cx - 32 : cx + 32;
+      ctx.fillStyle = pal.accent;
+      for (const a of [0.5, 1.1]) {
+        ctx.beginPath();
+        ctx.ellipse(kx + Math.cos(a) * 8 * (front ? -1 : 1), cy - 6 + Math.sin(a) * 8, 8, 4, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    if (has('eyepatch') && front) {
+      ctx.strokeStyle = '#160f0b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 24, cy - 12);
+      ctx.lineTo(cx + 34, cy + 6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(cx + 16, cy + 2, 9, 10, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#160f0b';
+      ctx.fill();
+      ctx.strokeStyle = OUTLINE;
+    }
+    if (has('dragon')) {
+      // Two curved horns + back spikes
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + s * 12, cy - 28);
+        ctx.quadraticCurveTo(cx + s * 22, cy - 50, cx + s * 30, cy - 54);
+        ctx.quadraticCurveTo(cx + s * 22, cy - 40, cx + s * 22, cy - 26);
+        ctx.closePath();
+        ctx.fillStyle = pal.ear;
+        ctx.fill();
+        ctx.stroke();
+      }
+      if (!front) {
+        for (let i = 0; i < 4; i++) {
+          const y = cy - 6 + i * 16;
+          ctx.beginPath();
+          ctx.moveTo(cx - 6, y);
+          ctx.lineTo(cx, y - 10);
+          ctx.lineTo(cx + 6, y);
+          ctx.closePath();
+          ctx.fillStyle = pal.accent;
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+    if (has('horn')) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, cy - 28);
+      ctx.lineTo(cx + 1, cy - 66);
+      ctx.lineTo(cx + 9, cy - 28);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(cx - 7, 0, cx + 9, 0);
+      g.addColorStop(0, '#fff3b0');
+      g.addColorStop(1, '#ffb800');
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(160,100,0,0.6)';
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 7 + i * 1.8, cy - 28 - i * 9);
+        ctx.lineTo(cx + 9 - i * 2.2, cy - 33 - i * 9);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = OUTLINE;
+    }
+    if (has('tiara')) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 20, cy - 26);
+      ctx.lineTo(cx - 14, cy - 42);
+      ctx.lineTo(cx - 6, cy - 32);
+      ctx.lineTo(cx, cy - 50);
+      ctx.lineTo(cx + 6, cy - 32);
+      ctx.lineTo(cx + 14, cy - 42);
+      ctx.lineTo(cx + 20, cy - 26);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, cy - 50, 0, cy - 26);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(1, '#8fd3ff');
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#59b8ff';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 34, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  if (layer === 'body') {
+    if (has('sparkles') || has('stars')) {
+      ctx.fillStyle = has('stars') ? '#fff6c2' : '#ffffff';
+      const rnd = seeded(has('stars') ? 31 : 17);
+      for (let i = 0; i < (has('stars') ? 12 : 7); i++) {
+        const x = 30 + rnd() * 70;
+        const y = 34 + rnd() * 120;
+        const r = 2.5 + rnd() * 3;
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const rr2 = k % 2 ? r * 0.35 : r;
+          const a = (k * Math.PI) / 4;
+          ctx.lineTo(x + Math.cos(a) * rr2, y + Math.sin(a) * rr2);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+  ctx.restore();
+}
+
 /** Head, face, teeth, eyes. */
 function drawHead(ctx, loadout, pal, pose) {
   const doll = loadout.baseDoll;
@@ -680,6 +917,7 @@ export function drawCharacter(ctx, loadout, pose = POSES.idle) {
   }
 
   // Back limbs
+  drawFeatures(ctx, pal, 'back');
   drawTail(ctx, loadout, pal);
   drawLeg(ctx, 56, 134 - tuck, pose.legB, { ...pal, shade: shade(pal.shade, -20) }, loadout.shoes);
   const sleeve = loadout.outfit === 'lumberjack_vest' ? null : loadout.outfit === 'raincoat' ? '#ffd23f' : null;
@@ -701,10 +939,12 @@ export function drawCharacter(ctx, loadout, pose = POSES.idle) {
   drawEar(ctx, 52, 40, -0.32 - earSway, pal);
   drawEar(ctx, 80, 38, 0.18 - earSway * 0.8, pal);
   drawHead(ctx, loadout, pal, pose);
+  drawFeatures(ctx, pal, 'head');
   drawHeadwear(ctx, loadout, pal);
   ctx.restore();
 
   drawArm(ctx, 76, 108 + bob, pose.arm, pal, sleeve);
+  drawFeatures(ctx, pal, 'body');
   ctx.restore();
 }
 
@@ -731,6 +971,7 @@ function drawDuck(ctx, loadout, pal, pose) {
   drawEar(ctx, 50, 52, -1.38, pal);
   drawEar(ctx, 62, 46, -1.2, pal);
   drawHead(ctx, loadout, pal, pose);
+  drawFeatures(ctx, pal, 'head');
   drawHeadwear(ctx, loadout, pal);
   ctx.restore();
 }
@@ -1086,6 +1327,7 @@ export function drawCharacterBack(ctx, loadout, pose = BACK_POSES.idle) {
     drawEar(ctx, 46, 52, -1.25, pal, false);
     drawEar(ctx, 82, 52, 1.25, pal, false);
     drawFurBall(ctx, 64, 66, pal);
+    drawFeatures(ctx, pal, 'head', false);
     backHeadwear(ctx, loadout);
     ctx.restore();
     backTail(ctx, loadout, pal);
@@ -1095,6 +1337,7 @@ export function drawCharacterBack(ctx, loadout, pose = BACK_POSES.idle) {
 
   const bob = pose.bob || 0;
   backLeg(ctx, 52, pose.liftL, pal, loadout.shoes);
+  drawFeatures(ctx, pal, 'back', false);
   backLeg(ctx, 76, pose.liftR, pal, loadout.shoes);
   backArm(ctx, 40, pose.armL, pal, sleeve, 1);
   backArm(ctx, 88, pose.armR, pal, sleeve, -1);
@@ -1115,9 +1358,11 @@ export function drawCharacterBack(ctx, loadout, pose = BACK_POSES.idle) {
   ctx.beginPath();
   ctx.arc(64, 72, 7, Math.PI * 0.2, Math.PI * 1.7);
   ctx.stroke();
+  drawFeatures(ctx, pal, 'head', false);
   backHeadwear(ctx, loadout);
   ctx.restore();
   backTail(ctx, loadout, pal);
+  drawFeatures(ctx, pal, 'body', false);
   ctx.restore();
 }
 

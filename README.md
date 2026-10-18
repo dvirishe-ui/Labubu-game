@@ -99,6 +99,15 @@ buffering lets a tap just before landing still count.
   - Giant toadstool houses: change lane. Swerving into the side of one just bumps you back ("BONK!").
 - Pace is fast from the first second: 16 m/s, ramping to 34 m/s. A score multiplier grows by one every 300 m, up to ×6.
 
+### Shop (`ShopScene` + `ShopSystem` + `PurchaseService`)
+
+The store is laid out like Brawl Stars:
+
+- **Deals:** a free daily gift, a featured skin at 30% off, and ticket and key bundles. They rotate at midnight, and each can be bought once per day.
+- **Boxes:** the three blind boxes with their odds and pity counters.
+- **Skins:** every Common, Rare, Epic and Legendary skin, sold for gems (Common and Rare also for coins). Mystery skins are box-exclusive.
+- **Gems:** a free daily video reward, plus gem packs. Real-money packs only work in the store builds. On the web the game says to ask a grown-up and charges nothing. `PurchaseService.js` documents where to plug in RevenueCat or another billing plugin. Put it behind a parental gate to meet the store family policies.
+
 ### Keeping kids coming back
 
 - **Praise pop-ups:** NICE! → GREAT! → AWESOME! → … → LEGENDARY!, with confetti, for dodge streaks and coin combos.
@@ -136,6 +145,7 @@ labubu-game/
     │   ├── RunnerScene.js          # core loop
     │   ├── UnboxingScene.js        # bounce -> foil swipe -> 3 shakes -> tiered reveal -> stats card
     │   ├── ShowroomScene.js        # wardrobe, live doll preview, stats inspector
+    │   ├── ShopScene.js            # Deals / Boxes / Skins / Gems store
     │   └── UIOverlayScene.js       # always-on-top toasts (quests, connectivity)
     ├── systems/
     │   ├── SaveManager.js          # localStorage CRUD, schema migration, dirty flag
@@ -145,7 +155,9 @@ labubu-game/
     │   ├── QuestManager.js         # event-driven mission tracker, daily/weekly reset, inbox
     │   ├── IdleRewardManager.js    # time-elapsed coin generation
     │   ├── AudioController.js      # Web Audio synthesized SFX + chiptune loops
-    │   ├── GachaSystem.js          # pure roll / pity / duplicate logic
+    │   ├── GachaSystem.js          # per-box rolls, pity, duplicates, skin purchases
+    │   ├── ShopSystem.js           # daily rotating deals
+    │   ├── PurchaseService.js      # real-money gem packs (native billing hook)
     │   ├── PerkCalculator.js       # loadout -> gameplay modifiers
     │   ├── RunnerItems.js          # item-box roulette table
     │   ├── DailyRewards.js         # L-A-B-U-B-U word hunt + daily Lucky Spin
@@ -162,6 +174,7 @@ labubu-game/
     │   └── ProceduralTextures.js   # coins, obstacles, blind box, foil, particles, parallax
     └── ui/
         ├── UIKit.js                # buttons, modals, scroll list, currency bar, backdrop
+        ├── Skin.js                 # painted glossy buttons, textured panels, rarity cards
         ├── Display.js              # high-DPI camera zoom plugin + pointer mapping
         ├── Fullscreen.js           # fullscreen + landscape lock
         └── TextPrompt.js           # in-page text dialog (rename)
@@ -200,19 +213,34 @@ crashes the game.
 - Perks from the loadout:
   - `beaver_paddle_tail`: triple jump (everyone has a double jump), and gravity is 35% lower while you hold on the way down.
   - `lumberjack_vest`: +3 m coin reach, which pulls in coins from neighbouring lanes.
-  - `beaver_labubu_secret` (the "secret beaver chase"): a 1-hit shield each run and +25% coin value.
+  - `beaver_labubu_secret` (the "secret beaver chase"): a 1-hit shield each run, plus the Mystery ×2 run bonus.
 
-### Gacha (`GachaDropTable` + `GachaSystem` + `UnboxingScene`)
+### Skins, rarities and run multipliers
 
-| Tier | Weight | Items |
-| --- | --- | --- |
-| Common | 60% | Raincoat, Beanie, Canvas Sneakers, Lumberjack Vest, Beaver Cap, Beaver Paddle Tail |
-| Rare | 29% | Macaron Pink, Sesame Grey, Toffee Brown |
-| Epic | 10% | Zimomo King, Space Explorer |
-| Secret Chase | 1% | Lumberjack Beaver Labubu |
+Every skin has a rarity. The rarer the skin you wear, the more you earn while running:
 
-- Pity: the 10th pull without an Epic is Epic or better, and the 50th pull without a Secret is a Secret.
-- A duplicate converts to coins, plus golden keys for Epic and Secret duplicates. A golden key opens a box that is guaranteed Epic or better.
+| Rarity | Run bonus (score & coins) | Shop price | Example skins |
+| --- | --- | --- | --- |
+| Common | ×1.0 | 30 gems / 900 coins | Classic Labubu, Mint Cream, Lemon Fizz, Cotton Candy |
+| Rare | ×1.15 | 80 gems / 2,500 coins | Macaron Pink, Sesame Grey, Toffee Brown, Matcha Latte |
+| Epic | ×1.3 | 170 gems | Zimomo King, Space Explorer, Pirate Captain, Strawberry Bunny |
+| Legendary | ×1.5 | 350 gems | Golden Labubu, Dragon Labubu, Unicorn Dream, Ice Queen |
+| Mystery | ×2.0 | boxes only | Lumberjack Beaver, Galaxy Labubu |
+
+The bonus shows on the HUD ("LEGENDARY ×1.5"), in the Showroom stats and on the results screen.
+
+### Blind boxes (`GachaDropTable.PACKS` + `GachaSystem` + `UnboxingScene`)
+
+Like a real Pop Mart series, each box shows its **Regular vs Mystery** odds up front, plus the full table:
+
+| Box | Pay with | Common | Rare | Epic | Legendary | Mystery | Pity |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Forest Friends | 1 ticket or 300 coins | 58% | 28% | 10% | 3.5% | 0.5% | Epic+ in 10, Legendary+ in 40, Mystery in 150 |
+| Sparkle | 1 golden key or 60 gems | – | 52% | 33% | 13% | 2% | Legendary+ in 15, Mystery in 60 |
+| Mega Mystery | 150 gems | – | – | 60% | 33% | 7% | Legendary+ in 4, Mystery in 20 |
+
+- Each box has its own pity counters (`save.pity.<box>`).
+- A duplicate converts to coins, plus golden keys (Epic+) and gems (Legendary+).
 - The result is rolled and saved before the animation starts, so closing the app mid-reveal can't re-roll a pull or lose it.
 - The reveal sequence: the box bounces in, you swipe to tear the foil (a tap or Space also tears a chunk, for accessibility), the box shakes 3 times with screen shake of 0.004, 0.009 and 0.018, and the glow takes on the tier color on the last shake. The burst uses tier-colored god rays and particles, and Epic and Secret add confetti rain. The stats card offers **Equip Now** or **Store in Collection**.
 
@@ -267,6 +295,7 @@ mobile browsers require.
 | Gravity, jump, speed ramp, magnet radius | `GameConfig.RUNNER` |
 | Ticket price, duplicate refunds | `GameConfig.ECONOMY` |
 | Idle rate, cap, multipliers | `GameConfig.IDLE` |
-| Drop weights, pity, items and perks | `GachaDropTable.js` |
+| Box odds, pity, prices, rarity multipliers, items and perks | `GachaDropTable.js` |
+| Daily deals | `systems/ShopSystem.js` |
 | Quest templates and rewards | `QuestCatalog.js` |
 | Obstacle hitboxes and unlock distances | `entities/ObstaclePool.js` |

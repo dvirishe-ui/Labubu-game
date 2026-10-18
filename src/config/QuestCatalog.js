@@ -148,5 +148,6 @@ export const getQuestTemplate = (id) => QUEST_TEMPLATES.find((q) => q.id === id)
 export const REWARD_LABELS = {
   popCoins: 'Pop Coins',
   blindBoxTickets: 'Ticket',
-  goldenKeys: 'Golden Key'
+  goldenKeys: 'Golden Key',
+  gems: 'Gems'
 };

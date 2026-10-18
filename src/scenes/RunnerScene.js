@@ -28,7 +28,9 @@ import { ObstaclePool, OBSTACLE_TYPES } from '../entities/ObstaclePool.js';
 import { CollectiblePool } from '../entities/CollectiblePool.js';
 import { placeBillboard } from '../entities/World3D.js';
 import { pointerPos, setupCamera } from '../ui/Display.js';
-import { makeButton, makeIconButton, makeProgressBar, Modal, outlinedText, textStyle, floatText } from '../ui/UIKit.js';
+import { makeButton, makeIconButton, makeProgressBar, Modal, outlinedText, textStyle, displayStyle, floatText } from '../ui/UIKit.js';
+import { uiImage, buttonKey, vignetteKey } from '../ui/Skin.js';
+import { CATALOG, RARITY_TIERS } from '../config/GachaDropTable.js';
 
 const SWIPE = 26; // logical px for a swipe
 const TAP_MS = 280;
@@ -116,6 +118,8 @@ export class RunnerScene extends Phaser.Scene {
 
   create() {
     this.perks = computePerks(Services.save.data.equipped);
+    // Rarer skins play with a score & coin multiplier (Legendary = x1.5).
+    this.skinMult = this.perks.skinMultiplier || 1;
     wordHuntState(Services.save);
 
     this.computeView();
@@ -144,6 +148,10 @@ export class RunnerScene extends Phaser.Scene {
     this.updateSpawner(); // pre-fill the road to the horizon
     this.renderWorld(0, 0);
     this.startCountdown();
+    if (this.skinMult > 1) {
+      const tier = RARITY_TIERS[CATALOG[Services.save.data.equipped.baseDoll].rarity];
+      this.time.delayedCall(500, () => this.popText(`${tier.label} x${this.skinMult}!`, Phaser.Display.Color.IntegerToColor(tier.glow).rgba));
+    }
   }
 
   // -------------------------------------------------------------------------- 3D view
@@ -315,12 +323,22 @@ export class RunnerScene extends Phaser.Scene {
     const hudDepth = 20000;
     this.hud = {};
     const h = this.hud;
+    h.vignette = uiImage(this, 0, 0, vignetteKey(this)).setDepth(hudDepth - 1).setAlpha(0.8);
     h.scoreBg = this.add.graphics().setDepth(hudDepth);
-    h.score = this.add.text(0, 0, '0', textStyle(48, '#ffffff', { stroke: '#3d2a52', strokeThickness: 8, fontStyle: 'bold italic' })).setDepth(hudDepth + 1);
+    h.score = this.add.text(0, 0, '0', displayStyle(48, '#ffffff', { stroke: '#3d2a52', strokeThickness: 9 })).setDepth(hudDepth + 1);
+    h.score.setShadow(0, 4, '#3d2a52', 0, true, false);
     h.mult = outlinedText(this, 0, 0, 'x1', 30, '#ffe066').setDepth(hudDepth + 1).setOrigin(0, 0.5);
     h.dist = this.add.text(0, 0, '0 m', textStyle(20, '#ffffff', { stroke: '#3d2a52', strokeThickness: 4 })).setDepth(hudDepth + 1);
     h.coinIcon = this.add.image(0, 0, 'coin').setScale(0.85).setDepth(hudDepth + 1);
-    h.coins = this.add.text(0, 0, '0', textStyle(36, '#ffe066', { stroke: '#3d2a52', strokeThickness: 7, fontStyle: 'bold italic' })).setOrigin(1, 0.5).setDepth(hudDepth + 1);
+    h.coins = this.add.text(0, 0, '0', displayStyle(36, '#ffe066', { stroke: '#3d2a52', strokeThickness: 7 })).setOrigin(1, 0.5).setDepth(hudDepth + 1);
+
+    // Skin rarity bonus badge ("LEGENDARY x1.5")
+    const tier = RARITY_TIERS[CATALOG[Services.save.data.equipped.baseDoll]?.rarity];
+    h.skin = this.add.container(0, 0).setDepth(hudDepth + 1).setVisible(this.skinMult > 1);
+    if (tier && this.skinMult > 1) {
+      const skinName = { rare: 'green', epic: 'purple', legendary: 'yellow', secret: 'pink' }[tier.key] || 'gray';
+      h.skin.add([uiImage(this, -6, -4, buttonKey(this, 190, 36, skinName, false)), outlinedText(this, 95, 16, `${tier.label.toUpperCase()} x${this.skinMult}`, 19)]);
+    }
     h.letters = WORD_HUNT.WORD.split('').map((ch) => this.add.image(0, 0, `letter_${ch}`).setScale(0.36).setDepth(hudDepth + 1));
     h.combo = outlinedText(this, 0, 0, '', 28, '#6ee7a8').setAlpha(0).setDepth(hudDepth + 1);
 
@@ -357,6 +375,8 @@ export class RunnerScene extends Phaser.Scene {
     h.coins.setPosition(W - 104, 42);
     h.pause.setPosition(W - 46, 44);
     h.letters.forEach((l, i) => l.setPosition(36 + i * 38, 136));
+    h.skin.setPosition(18, 162);
+    h.vignette.setDisplaySize(W, HEIGHT);
     h.combo.setPosition(W / 2, this.view.portrait ? 190 : 120);
     h.item.setPosition(W - 70, this.view.portrait ? 160 : 150);
     h.magnetBar.graphics.setPosition(W - 230, 82);
@@ -550,7 +570,7 @@ export class RunnerScene extends Phaser.Scene {
     if (this.started && !this.isOver) {
       this.distance += dz;
       this.multiplier = Math.min(RUNNER.MAX_MULTIPLIER, 1 + Math.floor(this.distance / RUNNER.MULTIPLIER_EVERY_M)) + (this.player.hasStar ? 1 : 0);
-      this.score += dz * 10 * this.multiplier;
+      this.score += dz * 10 * this.multiplier * this.skinMult;
     }
 
     this.renderWorld(dz, dt);
@@ -928,8 +948,8 @@ export class RunnerScene extends Phaser.Scene {
       this.lastCoinAt = now;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       this.coinCount += 1;
-      this.coinBank += RUNNER.COIN_VALUE * this.perks.coinMultiplier;
-      this.score += 5 * this.multiplier;
+      this.coinBank += RUNNER.COIN_VALUE * this.perks.coinMultiplier * this.skinMult;
+      this.score += 5 * this.multiplier * this.skinMult;
       Services.audio.play('coin');
       this.sparkle.explode(3, f.x, f.y);
       if (this.combo >= 3) {
@@ -1120,7 +1140,7 @@ export class RunnerScene extends Phaser.Scene {
     modal.add(outlinedText(this, 320, 92, score.toLocaleString('en-US'), 64, '#ffe066'));
     const lines = [
       ['Distance', `${distance.toLocaleString('en-US')} m`],
-      ['Pop Coins', `+${coins}`],
+      ['Pop Coins', `+${coins}${this.skinMult > 1 ? `  (skin x${this.skinMult})` : ''}`],
       ['Best combo · close calls', `x${this.maxCombo} · ${this.closeCalls}`],
       ['Best score', `${Math.max(prevBest, score).toLocaleString('en-US')}`]
     ];
@@ -1128,7 +1148,7 @@ export class RunnerScene extends Phaser.Scene {
       const y = 170 + i * 48;
       modal.add([
         this.add.text(70, y, label, textStyle(23, '#7a6a8a')).setOrigin(0, 0.5),
-        this.add.text(570, y, value, textStyle(26, i === 1 ? '#c98a00' : COLORS.text)).setOrigin(1, 0.5)
+        this.add.text(570, y, value, displayStyle(26, i === 1 ? '#d18a00' : COLORS.text)).setOrigin(1, 0.5)
       ]);
     });
     const st = wordHuntState(Services.save);
@@ -1144,8 +1164,15 @@ export class RunnerScene extends Phaser.Scene {
     };
     modal.add(makeButton(this, 320, 458, 'PLAY AGAIN', () => leave('Runner'), { w: 340, h: 80, fontSize: 34, color: COLORS.gold, colorDark: COLORS.goldDark }));
     modal.add(makeButton(this, 180, 548, 'Menu', () => leave('MainMenu'), { w: 230, h: 58, fontSize: 24, color: COLORS.mint, colorDark: 0x4fb594 }));
-    const boxBtn = makeButton(this, 460, 548, 'Open Box', () => leave('Unboxing', { source: 'ticket' }), { w: 230, h: 58, fontSize: 24, icon: 'ticket', iconScale: 0.5 });
-    boxBtn.setEnabled(Services.save.data.currencies.blindBoxTickets > 0);
+    const hasTicket = Services.save.data.currencies.blindBoxTickets > 0;
+    const boxBtn = makeButton(this, 460, 548, hasTicket ? 'Open Box' : 'Shop', () => (hasTicket ? leave('Unboxing', { packId: 'classic', currency: 'blindBoxTickets' }) : leave('Shop')), {
+      w: 230,
+      h: 58,
+      fontSize: 24,
+      icon: hasTicket ? 'ticket' : 'gem',
+      iconScale: 0.55,
+      skin: hasTicket ? 'yellow' : 'purple'
+    });
     modal.add(boxBtn);
   }
 }

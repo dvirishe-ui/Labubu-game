@@ -40,7 +40,8 @@ export function createDefaultSave(now = Date.now()) {
     currencies: {
       popCoins: ECONOMY.STARTING_COINS,
       blindBoxTickets: ECONOMY.STARTING_TICKETS,
-      goldenKeys: 0
+      goldenKeys: 0,
+      gems: ECONOMY.STARTING_GEMS
     },
     equipped: {
       baseDoll: 'labubu_classic',
@@ -66,10 +67,12 @@ export function createDefaultSave(now = Date.now()) {
       weeklyQuests: [],
       inbox: []
     },
-    pityCounter: {
-      pullsSinceLastEpic: 0,
-      pullsSinceLastSecret: 0
+    pity: {
+      classic: { sinceEpic: 0, sinceLegendary: 0, sinceSecret: 0 },
+      sparkle: { sinceEpic: 0, sinceLegendary: 0, sinceSecret: 0 },
+      mega: { sinceEpic: 0, sinceLegendary: 0, sinceSecret: 0 }
     },
+    shop: { dealsDate: '', bought: [] },
     settings: { muted: false, music: true },
     wordHunt: { date: '', collected: [], completed: false },
     luckySpin: { lastSpinDate: '' },
@@ -106,7 +109,13 @@ function structuredCloneSafe(value) {
  */
 export function migrateSave(raw, now = Date.now()) {
   const defaults = createDefaultSave(now);
-  const data = fillDefaults(raw && typeof raw === 'object' ? raw : {}, defaults);
+  const src = raw && typeof raw === 'object' ? raw : {};
+  // v2 -> v3: single pity counter became per-pack counters.
+  if (src.pityCounter && !src.pity) {
+    src.pity = { classic: { sinceEpic: src.pityCounter.pullsSinceLastEpic || 0, sinceLegendary: 0, sinceSecret: src.pityCounter.pullsSinceLastSecret || 0 } };
+  }
+  delete src.pityCounter;
+  const data = fillDefaults(src, defaults);
 
   // A save without identity is useless for sync - keep the generated one.
   if (!data.profile.playerId) data.profile.playerId = defaults.profile.playerId;

@@ -14,11 +14,16 @@
  */
 import Phaser from 'phaser';
 import { WIDTH, HEIGHT, COLORS, EVENTS } from '../config/GameConfig.js';
-import { RARITY_TIERS, SERIES_NAME, describePerks } from '../config/GachaDropTable.js';
+import { RARITY_TIERS, SERIES_NAME, PACKS, describePerks } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
-import { pullBlindBox } from '../systems/GachaSystem.js';
+import { chooseCost, pullBlindBox } from '../systems/GachaSystem.js';
 import { bakeCharacterFrame, bakePlayerTextures, previewLoadoutFor } from '../art/CharacterRenderer.js';
 import { CurrencyBar, makeButton, makePanel, outlinedText, textStyle } from '../ui/UIKit.js';
+import { uiImage, buttonKey, shineKey } from '../ui/Skin.js';
+
+/** Legacy `source` values still used by quests: ticket -> Classic, key -> Sparkle. */
+const LEGACY_SOURCE = { ticket: ['classic', 'blindBoxTickets'], key: ['sparkle', 'goldenKeys'] };
+const RIBBON_SKIN = { common: 'gray', rare: 'green', epic: 'purple', legendary: 'yellow', secret: 'pink' };
 
 const FOIL_W = 196; // foil texture width
 const FOIL_SCALE = 0.77; // scaled to span the box's front-top edge
@@ -32,7 +37,10 @@ export class UnboxingScene extends Phaser.Scene {
   }
 
   init(data) {
-    this.source = data?.source || 'ticket';
+    const legacy = LEGACY_SOURCE[data?.source];
+    this.packId = data?.packId || legacy?.[0] || 'classic';
+    this.currency = data?.currency || legacy?.[1] || null;
+    this.source = this.packId;
     this.phase = 'drop';
     this.tearProgress = 0;
     this.lastTearSfx = 0;
@@ -40,10 +48,10 @@ export class UnboxingScene extends Phaser.Scene {
 
   create() {
     // Roll first: the outcome is committed before the show starts.
-    this.result = pullBlindBox(Services.save, this.source);
+    this.result = pullBlindBox(Services.save, this.packId, this.currency);
     if (!this.result.ok) {
-      Services.bus.emit('ui:toast', { text: 'Not enough tickets', color: COLORS.pink });
-      this.scene.start('MainMenu');
+      Services.bus.emit('ui:toast', { text: 'Not enough to open this box', sub: 'Get more in the Shop', color: COLORS.pink });
+      this.scene.start('Shop', { tab: 'boxes' });
       return;
     }
     this.tier = RARITY_TIERS[this.result.rarity];
@@ -85,7 +93,7 @@ export class UnboxingScene extends Phaser.Scene {
 
     // The box is a container: body + foil strip so they shake together.
     this.box = this.add.container(this.BX, -260);
-    this.boxImg = this.add.image(0, 0, 'box_closed');
+    this.boxImg = this.add.image(0, 0, `box_closed_${this.packId}`);
     this.foil = this.add.image(-90, FOIL_Y, 'foil_strip').setOrigin(0, 0.5).setScale(FOIL_SCALE, 0.9);
     this.box.add([this.boxImg, this.foil]);
 
@@ -212,8 +220,8 @@ export class UnboxingScene extends Phaser.Scene {
     const rarity = this.result.rarity;
 
     // Lid pops off
-    this.boxImg.setTexture('box_open');
-    const lid = this.add.image(this.box.x, this.box.y - 115, 'box_lid');
+    this.boxImg.setTexture(`box_open_${this.packId}`);
+    const lid = this.add.image(this.box.x, this.box.y - 115, `box_lid_${this.packId}`);
     this.tweens.add({ targets: lid, y: lid.y - 380, x: lid.x + 220, angle: 160, alpha: 0, duration: 800, ease: 'Cubic.easeOut', onComplete: () => lid.destroy() });
 
     // Lighting
@@ -227,12 +235,13 @@ export class UnboxingScene extends Phaser.Scene {
     this.tweens.add({ targets: this.glow, alpha: 0.9, scale: 3.2, duration: 500 });
 
     // Particle burst sized by rarity
-    const counts = { common: 24, rare: 45, epic: 80, secret: 140 };
+    const counts = { common: 24, rare: 45, epic: 80, legendary: 110, secret: 150 };
     const tints = {
       common: [0xd7dade, 0xffffff, 0x9aa0a6],
-      rare: [0x3fa9f5, 0x9fd6ff, 0xffffff],
+      rare: [0x3ecf6b, 0xb8ffd0, 0xffffff],
       epic: [0xa45cff, 0xd4b0ff, 0xff8fb1],
-      secret: [0xffc93c, 0xfff1b8, 0xffffff, 0xffe066]
+      legendary: [0xffc93c, 0xfff1b8, 0xffffff, 0xffe066],
+      secret: [0xff4fa3, 0xffd23f, 0x6ee7a8, 0x59b8ff, 0xb07cff, 0xffffff]
     };
     const burst = this.add.particles(0, 0, 'p_spark', {
       lifespan: { min: 600, max: 1300 },
@@ -245,7 +254,8 @@ export class UnboxingScene extends Phaser.Scene {
     });
     burst.explode(counts[rarity], this.box.x, this.box.y - 100);
 
-    if (rarity === 'secret' || rarity === 'epic') {
+    const big = tier.rank >= RARITY_TIERS.epic.rank;
+    if (big) {
       // Confetti rain (gold for Secret Chase)
       const rain = this.add.particles(0, -20, 'p_confetti', {
         x: { min: 0, max: WIDTH },
@@ -253,11 +263,11 @@ export class UnboxingScene extends Phaser.Scene {
         speedY: { min: 160, max: 320 },
         speedX: { min: -60, max: 60 },
         rotate: { start: 0, end: 540 },
-        tint: rarity === 'secret' ? [0xffc93c, 0xfff1b8, 0xffe066, 0xffffff] : [0xa45cff, 0xff8fb1, 0x8fe3c6, 0xffffff],
+        tint: tints[rarity],
         frequency: 18,
         quantity: 2
       });
-      this.time.delayedCall(rarity === 'secret' ? 3000 : 1500, () => rain.stop());
+      this.time.delayedCall(tier.rank >= 3 ? 3000 : 1500, () => rain.stop());
     }
 
     // Figure rises
@@ -267,8 +277,9 @@ export class UnboxingScene extends Phaser.Scene {
     await this.tween({ targets: this.figure, y: figY, scale: 1.25, alpha: 1, duration: 750, ease: 'Back.easeOut' });
     this.tweens.add({ targets: this.figure, y: figY - 15, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    if (rarity === 'secret') {
-      const banner = outlinedText(this, WIDTH / 2, 90, '★ SECRET CHASE ★', 52, '#ffc93c').setScale(0);
+    if (tier.rank >= RARITY_TIERS.legendary.rank) {
+      const text = rarity === 'secret' ? '★ MYSTERY LABUBU ★' : '★ LEGENDARY ★';
+      const banner = outlinedText(this, WIDTH / 2, this.portrait ? 150 : 90, text, Math.min(52, WIDTH / 13), rarity === 'secret' ? '#ff8fd0' : '#ffc93c').setScale(0);
       this.banner = banner;
       this.tweens.add({ targets: banner, scale: 1, duration: 500, ease: 'Back.easeOut' });
       this.tweens.add({ targets: banner, angle: { from: -3, to: 3 }, yoyo: true, repeat: -1, duration: 400 });
@@ -276,7 +287,7 @@ export class UnboxingScene extends Phaser.Scene {
     }
 
     Services.bus.emit(EVENTS.BOX_OPENED, { itemId: this.result.itemId, rarity, isNew: this.result.isNew, source: this.source });
-    await this.wait(rarity === 'secret' ? 1200 : 500);
+    await this.wait(tier.rank >= 3 ? 1200 : 500);
     this.showCard();
   }
 
@@ -304,40 +315,57 @@ export class UnboxingScene extends Phaser.Scene {
 
     const card = this.add.container(WIDTH + 400, cardY);
     const x0 = 0;
-    const panel = makePanel(this, x0, 90, 520, 560, { radius: 26 });
-    const ribbon = this.add.graphics();
-    ribbon.fillStyle(tier.color, 1).fillRoundedRect(x0 + 20, 110, 480, 54, 18);
-    ribbon.lineStyle(3, COLORS.panelDark, 1).strokeRoundedRect(x0 + 20, 110, 480, 54, 18);
-    card.add([panel, ribbon]);
-    card.add(outlinedText(this, x0 + 260, 137, tier.label.toUpperCase(), 30, '#ffffff'));
-    card.add(this.add.text(x0 + 260, 200, item.name, textStyle(34, COLORS.text, { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
-    card.add(this.add.text(x0 + 260, 240, `${SERIES_NAME} · ${SLOT_LABEL[item.slot]}`, textStyle(17, '#8a7a9a')).setOrigin(0.5));
-    card.add(this.add.text(x0 + 40, 270, item.description, textStyle(20, '#5a4a6a', { wordWrap: { width: 440 }, fontStyle: 'normal', lineSpacing: 4 })));
+    const panel = makePanel(this, x0, 90, 520, 560, { radius: 26, header: tier.color, headerH: 74 });
+    card.add(panel);
+    card.add(outlinedText(this, x0 + 260, 127, tier.label.toUpperCase(), 38, '#ffffff'));
+    card.add(this.add.text(x0 + 260, 196, item.name, textStyle(34, COLORS.text, { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
+    card.add(this.add.text(x0 + 260, 234, `${SERIES_NAME} · ${SLOT_LABEL[item.slot]}`, textStyle(17, '#8a7a9a')).setOrigin(0.5));
+    card.add(this.add.text(x0 + 40, 258, item.description, textStyle(19, '#5a4a6a', { wordWrap: { width: 440 }, lineSpacing: 4 })));
 
+    // Skins carry a run multiplier - show it big, like a power stat.
+    let perkY = 352;
+    if (item.slot === 'doll' && tier.multiplier > 1) {
+      card.add(uiImage(this, x0 + 130 - 6, 336 - 4, buttonKey(this, 260, 48, RIBBON_SKIN[item.rarity], false)));
+      card.add(outlinedText(this, x0 + 260, 358, `x${tier.multiplier} SCORE & COINS`, 24));
+      perkY = 400;
+    }
     const perkLines = describePerks(item.perks);
-    card.add(this.add.text(x0 + 40, 372, 'Perks', textStyle(22, COLORS.text)));
-    card.add(this.add.text(x0 + 40, 402, perkLines.map((l) => `• ${l}`).join('\n'), textStyle(19, '#3fa98a', { lineSpacing: 6, wordWrap: { width: 440 } })));
+    card.add(this.add.text(x0 + 40, perkY, perkLines.map((l) => `• ${l}`).join('\n'), textStyle(19, '#2f9a7a', { lineSpacing: 6, wordWrap: { width: 440 } })));
 
-    const status = isNew
-      ? 'NEW! Added to your collection'
-      : `Duplicate · converted to +${refund.coins} coins${refund.keys ? ` & +${refund.keys} golden key${refund.keys > 1 ? 's' : ''}` : ''}`;
-    card.add(this.add.text(x0 + 260, 480, status, textStyle(19, isNew ? '#e0567f' : '#c98a00', { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
-    if (pityTriggered) card.add(this.add.text(x0 + 260, 508, `Pity guarantee: ${pityTriggered === 'secret' ? 'Secret Chase' : 'Epic+'}`, textStyle(16, '#8a7a9a')).setOrigin(0.5));
+    const extras = [refund.coins && `+${refund.coins} coins`, refund.gems && `+${refund.gems} gems`, refund.keys && `+${refund.keys} key${refund.keys > 1 ? 's' : ''}`].filter(Boolean);
+    const status = isNew ? 'NEW! Added to your collection' : `Duplicate · converted to ${extras.join(' & ')}`;
+    card.add(this.add.text(x0 + 260, 494, status, textStyle(19, isNew ? '#e0567f' : '#c98a00', { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
+    if (pityTriggered) {
+      const name = { epic: 'Epic+', legendary: 'Legendary+', secret: 'Mystery' }[pityTriggered];
+      card.add(this.add.text(x0 + 260, 520, `Pity guarantee: ${name}`, textStyle(16, '#8a7a9a')).setOrigin(0.5));
+    }
 
-    const equipBtn = makeButton(this, x0 + 140, 590, 'Equip Now', () => this.equipNow(), { w: 220, h: 66, fontSize: 26, color: COLORS.gold, colorDark: COLORS.goldDark });
-    const storeBtn = makeButton(this, x0 + 385, 590, 'Store', () => this.leave('MainMenu'), { w: 220, h: 66, fontSize: 26, color: COLORS.mint, colorDark: 0x4fb594 });
+    // Shine sweep across the card for Epic and better
+    if (tier.rank >= RARITY_TIERS.epic.rank) {
+      const shine = uiImage(this, x0 + 10, 96, shineKey(this)).setAlpha(0);
+      shine.setDisplaySize(44, 548);
+      card.add(shine);
+      const sweep = { delay: 700, repeat: -1, repeatDelay: 1800 };
+      this.tweens.add({ targets: shine, x: x0 + 466, duration: 1000, ease: 'Sine.easeInOut', ...sweep });
+      this.tweens.add({ targets: shine, alpha: 0.55, duration: 500, yoyo: true, ...sweep, repeatDelay: 1800 });
+    }
+
+    const equipBtn = makeButton(this, x0 + 140, 590, 'Equip Now', () => this.equipNow(), { w: 220, h: 66, fontSize: 26, skin: 'yellow' });
+    const storeBtn = makeButton(this, x0 + 385, 590, 'Store', () => this.leave('MainMenu'), { w: 220, h: 66, fontSize: 26, skin: 'green' });
     card.add([equipBtn, storeBtn]);
-    card.add(this.add.text(x0 + 385, 632, 'in Collection', textStyle(15, '#8a7a9a')).setOrigin(0.5));
 
-    const tickets = Services.save.data.currencies.blindBoxTickets;
-    if (tickets > 0) {
+    // Same box again, if the player can still pay for it.
+    const again = chooseCost(Services.save, this.packId, this.currency) || chooseCost(Services.save, this.packId);
+    if (again) {
+      const icon = { blindBoxTickets: 'ticket', goldenKeys: 'key', gems: 'gem', popCoins: 'coin' }[again.currency];
       card.add(
-        makeButton(this, x0 + 260, 690, `Open another (${tickets} left)`, () => this.scene.restart({ source: 'ticket' }), {
+        makeButton(this, x0 + 260, 682, `Open another  ${again.amount}`, () => this.scene.restart({ packId: this.packId, currency: again.currency }), {
           w: 340,
-          h: 50,
-          fontSize: 20,
-          icon: 'ticket',
-          iconScale: 0.45
+          h: 54,
+          fontSize: 22,
+          skin: 'pink',
+          icon,
+          iconScale: 0.5
         })
       );
     }

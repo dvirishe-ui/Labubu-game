@@ -1,58 +1,61 @@
 /**
  * GachaSystem.js
- * Pure blind-box logic: weighted rarity roll, pity counters, duplicate refunds.
+ * Pure blind-box logic: per-pack weighted rarity rolls with posted odds,
+ * per-pack pity counters, duplicate refunds, and direct skin purchases.
  * No Phaser here - UnboxingScene calls `pullBlindBox` and only animates the
  * result. The result is committed to the save BEFORE the animation starts so
  * closing the app mid-reveal can never re-roll or lose a pull.
  */
-import { RARITY_TIERS, RARITY_ORDER, PITY, DROP_POOL, CATALOG } from '../config/GachaDropTable.js';
+import { RARITY_TIERS, RARITY_ORDER, DROP_POOL, CATALOG, PACKS, SKIN_PRICES } from '../config/GachaDropTable.js';
 import { ECONOMY } from '../config/GameConfig.js';
 
-/** Box sources and what they cost. A golden key box is guaranteed Epic or better. */
-export const BOX_SOURCES = {
-  ticket: { currency: 'blindBoxTickets', cost: 1, minRank: 0 },
-  key: { currency: 'goldenKeys', cost: 1, minRank: 2 }
-};
-
-/** Weighted pick among the tiers whose rank >= minRank. */
-export function weightedRarity(rng = Math.random, minRank = 0) {
-  const tiers = RARITY_ORDER.map((k) => RARITY_TIERS[k]).filter((t) => t.rank >= minRank);
-  const total = tiers.reduce((sum, t) => sum + t.weight, 0);
+/** Weighted pick from a pack's `odds`, restricted to tiers with rank >= minRank. */
+export function weightedRarity(odds, rng = Math.random, minRank = 0) {
+  const tiers = RARITY_ORDER.filter((k) => (odds[k] || 0) > 0 && RARITY_TIERS[k].rank >= minRank);
+  if (!tiers.length) return RARITY_ORDER.filter((k) => RARITY_TIERS[k].rank >= minRank)[0];
+  const total = tiers.reduce((sum, k) => sum + odds[k], 0);
   let roll = rng() * total;
-  for (const tier of tiers) {
-    roll -= tier.weight;
-    if (roll < 0) return tier.key;
+  for (const k of tiers) {
+    roll -= odds[k];
+    if (roll < 0) return k;
   }
-  return tiers[tiers.length - 1].key;
+  return tiers[tiers.length - 1];
 }
 
+/** Fresh pity counters for one pack. */
+export const emptyPity = () => ({ sinceEpic: 0, sinceLegendary: 0, sinceSecret: 0 });
+
 /**
- * Rolls a rarity while honouring pity. Counters count the CURRENT pull, so the
- * 10th pull without an Epic is forced to Epic+, the 50th without a Secret is
- * forced to Secret.
- * @returns {{ rarity: string, pity: object, pityTriggered: null|'epic'|'secret' }}
+ * Rolls a rarity for `pack` while honouring its pity rules. Counters count the
+ * CURRENT pull, so with pity.legendary = 40 the 40th pull without a Legendary
+ * is forced to Legendary or better.
+ * @returns {{ rarity: string, pity: object, pityTriggered: null|'epic'|'legendary'|'secret' }}
  */
-export function rollRarity(pityCounter, rng = Math.random, minRank = 0) {
+export function rollRarity(pack, counters, rng = Math.random) {
   const pity = {
-    pullsSinceLastEpic: (pityCounter?.pullsSinceLastEpic ?? 0) + 1,
-    pullsSinceLastSecret: (pityCounter?.pullsSinceLastSecret ?? 0) + 1
+    sinceEpic: (counters?.sinceEpic ?? 0) + 1,
+    sinceLegendary: (counters?.sinceLegendary ?? 0) + 1,
+    sinceSecret: (counters?.sinceSecret ?? 0) + 1
   };
+  const rules = pack.pity || {};
   let rarity;
   let pityTriggered = null;
-
-  if (pity.pullsSinceLastSecret >= PITY.SECRET_EVERY) {
+  if (rules.secret && pity.sinceSecret >= rules.secret) {
     rarity = 'secret';
     pityTriggered = 'secret';
-  } else if (pity.pullsSinceLastEpic >= PITY.EPIC_EVERY && minRank < RARITY_TIERS.epic.rank) {
-    rarity = weightedRarity(rng, RARITY_TIERS.epic.rank);
+  } else if (rules.legendary && pity.sinceLegendary >= rules.legendary) {
+    rarity = weightedRarity(pack.odds, rng, RARITY_TIERS.legendary.rank);
+    pityTriggered = 'legendary';
+  } else if (rules.epic && pity.sinceEpic >= rules.epic) {
+    rarity = weightedRarity(pack.odds, rng, RARITY_TIERS.epic.rank);
     pityTriggered = 'epic';
   } else {
-    rarity = weightedRarity(rng, minRank);
+    rarity = weightedRarity(pack.odds, rng);
   }
-
   const rank = RARITY_TIERS[rarity].rank;
-  if (rank >= RARITY_TIERS.epic.rank) pity.pullsSinceLastEpic = 0;
-  if (rarity === 'secret') pity.pullsSinceLastSecret = 0;
+  if (rank >= RARITY_TIERS.epic.rank) pity.sinceEpic = 0;
+  if (rank >= RARITY_TIERS.legendary.rank) pity.sinceLegendary = 0;
+  if (rarity === 'secret') pity.sinceSecret = 0;
   return { rarity, pity, pityTriggered };
 }
 
@@ -62,37 +65,61 @@ export function pickItem(rarity, rng = Math.random) {
   return pool[Math.floor(rng() * pool.length) % pool.length];
 }
 
-/**
- * Spends the box currency, rolls, and writes the outcome to the save.
- * @param {import('./SaveManager.js').SaveManager} saveManager
- * @param {'ticket'|'key'} source
- * @returns {{ok: false, reason: string} | {ok: true, itemId, rarity, isNew, refund, pityTriggered}}
- */
-export function pullBlindBox(saveManager, source = 'ticket', rng = Math.random) {
-  const spec = BOX_SOURCES[source];
-  if (!spec) return { ok: false, reason: 'unknown_source' };
-  const data = saveManager.data;
-  if ((data.currencies[spec.currency] ?? 0) < spec.cost) return { ok: false, reason: 'insufficient' };
+/** The first way to pay for `packId` the player can afford (or a specific currency). */
+export function chooseCost(saveManager, packId, currency = null) {
+  const pack = PACKS[packId];
+  if (!pack) return null;
+  const c = saveManager.data.currencies;
+  const options = currency ? pack.costs.filter((o) => o.currency === currency) : pack.costs;
+  return options.find((o) => (c[o.currency] ?? 0) >= o.amount) || null;
+}
 
-  const { rarity, pity, pityTriggered } = rollRarity(data.pityCounter, rng, spec.minRank);
+/** Pulls left before each pity guarantee for a pack (for the UI). */
+export function pityStatus(saveManager, packId) {
+  const pack = PACKS[packId];
+  const p = saveManager.data.pity?.[packId] || emptyPity();
+  const out = {};
+  if (pack.pity.epic) out.epic = pack.pity.epic - p.sinceEpic;
+  if (pack.pity.legendary) out.legendary = pack.pity.legendary - p.sinceLegendary;
+  if (pack.pity.secret) out.secret = pack.pity.secret - p.sinceSecret;
+  return out;
+}
+
+/**
+ * Spends the pack's cost, rolls, and writes the outcome to the save.
+ * @param {import('./SaveManager.js').SaveManager} saveManager
+ * @param {string} packId    'classic' | 'sparkle' | 'mega'
+ * @param {string} [currency] pay with this currency (default: first affordable)
+ */
+export function pullBlindBox(saveManager, packId = 'classic', currency = null, rng = Math.random) {
+  const pack = PACKS[packId];
+  if (!pack) return { ok: false, reason: 'unknown_pack' };
+  const cost = chooseCost(saveManager, packId, currency);
+  if (!cost) return { ok: false, reason: 'insufficient' };
+
+  const data = saveManager.data;
+  data.pity = data.pity || {};
+  const { rarity, pity, pityTriggered } = rollRarity(pack, data.pity[packId], rng);
   const itemId = pickItem(rarity, rng);
   const isNew = saveManager.unlockItem(itemId);
 
-  data.currencies[spec.currency] -= spec.cost;
-  data.pityCounter = pity;
+  data.currencies[cost.currency] -= cost.amount;
+  data.pity[packId] = pity;
   data.stats.boxesOpened += 1;
 
-  const refund = { coins: 0, keys: 0 };
+  const refund = { coins: 0, keys: 0, gems: 0 };
   if (!isNew) {
-    refund.coins = ECONOMY.DUPLICATE_REFUND[rarity];
-    refund.keys = ECONOMY.DUPLICATE_KEYS[rarity];
+    refund.coins = ECONOMY.DUPLICATE_REFUND[rarity] || 0;
+    refund.keys = ECONOMY.DUPLICATE_KEYS[rarity] || 0;
+    refund.gems = ECONOMY.DUPLICATE_GEMS[rarity] || 0;
     data.currencies.popCoins += refund.coins;
     data.currencies.goldenKeys += refund.keys;
+    data.currencies.gems += refund.gems;
     data.stats.duplicatesPulled += 1;
   }
 
   saveManager.save('gacha');
-  return { ok: true, itemId, item: CATALOG[itemId], rarity, isNew, refund, pityTriggered, source };
+  return { ok: true, itemId, item: CATALOG[itemId], rarity, isNew, refund, pityTriggered, packId, cost };
 }
 
 /** Converts Pop Coins into a ticket. */
@@ -100,4 +127,26 @@ export function buyTicket(saveManager) {
   if (!saveManager.spendCurrency('popCoins', ECONOMY.TICKET_PRICE_COINS, 'buy_ticket_spend')) return false;
   saveManager.addCurrency('blindBoxTickets', 1, 'buy_ticket');
   return true;
+}
+
+/** Shop price of an item, e.g. { gems: 80, popCoins: 2500 } or null (box-exclusive). */
+export function skinPrice(itemId) {
+  const item = CATALOG[itemId];
+  if (!item) return null;
+  return SKIN_PRICES[item.rarity] || null;
+}
+
+/**
+ * Buys a skin/accessory from the shop. `discount` (0..1) applies to the price.
+ * Returns { ok, reason? }.
+ */
+export function buySkin(saveManager, itemId, currency = 'gems', discount = 0) {
+  const price = skinPrice(itemId);
+  if (!price || price[currency] === undefined) return { ok: false, reason: 'not_for_sale' };
+  if (saveManager.hasItem(itemId)) return { ok: false, reason: 'owned' };
+  const amount = Math.round(price[currency] * (1 - discount));
+  if (!saveManager.spendCurrency(currency, amount, 'shop_skin')) return { ok: false, reason: 'insufficient' };
+  saveManager.unlockItem(itemId);
+  saveManager.save('shop_skin_unlock');
+  return { ok: true, amount };
 }

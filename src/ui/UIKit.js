@@ -1,70 +1,80 @@
 /**
  * UIKit.js
- * Small reusable UI widgets built from Phaser primitives: buttons, panels,
- * modals, progress bars, the currency bar and a drag-scroll list. Keeping them
- * here keeps every scene's layout code short and visually consistent.
+ * Reusable UI widgets: glossy buttons, textured panels, modals, progress bars,
+ * the currency bar and a drag-scroll list. Visuals come from ui/Skin.js
+ * (canvas-painted, cached, crisp at any resolution) so every screen shares
+ * one polished look.
  */
 import Phaser from 'phaser';
-import { COLORS, FONT, WIDTH, HEIGHT, EVENTS, RES } from '../config/GameConfig.js';
+import { COLORS, FONT, FONT_DISPLAY, WIDTH, HEIGHT, EVENTS, RES } from '../config/GameConfig.js';
 import { Services } from '../systems/Services.js';
+import { INK, uiImage, addPanel, buttonKey, roundKey, pillKey } from './Skin.js';
 
-/** Shared text style factory. */
+/** Body text style (Fredoka). Text is rasterised at RES so it stays crisp. */
 export function textStyle(size = 24, color = COLORS.text, extra = {}) {
-  // Text is rasterised at RES so it stays crisp under the camera zoom.
-  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: 'bold', resolution: RES, ...extra };
+  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: '600', resolution: RES, ...extra };
 }
 
-/** Text with a chunky outline - used for titles and HUD numbers. */
-export function outlinedText(scene, x, y, str, size = 32, color = '#ffffff', stroke = '#3d2a52') {
-  return scene.add.text(x, y, str, textStyle(size, color, { stroke, strokeThickness: Math.max(4, size / 6) })).setOrigin(0.5);
+/** Chunky display style (Lilita One) for titles, numbers and buttons. */
+export function displayStyle(size = 32, color = '#ffffff', extra = {}) {
+  return { fontFamily: FONT_DISPLAY, fontSize: `${size}px`, color, fontStyle: 'normal', resolution: RES, ...extra };
 }
 
-/** Draws a rounded panel into a Graphics object (with a soft drop shadow). */
-export function drawPanel(g, x, y, w, h, { color = COLORS.panel, alpha = 1, radius = 22, stroke = COLORS.panelDark, strokeWidth = 4, shadow = true } = {}) {
-  if (shadow) {
-    g.fillStyle(0x000000, 0.18);
-    g.fillRoundedRect(x + 4, y + 7, w, h, radius);
+/** Outlined display text with a drop shadow - titles and HUD numbers. */
+export function outlinedText(scene, x, y, str, size = 32, color = '#ffffff', stroke = INK) {
+  const t = scene.add.text(x, y, str, displayStyle(size, color, { stroke, strokeThickness: Math.max(5, size / 5.5) })).setOrigin(0.5);
+  t.setShadow(0, Math.max(3, size / 14), stroke, 0, true, false);
+  return t;
+}
+
+/** Textured panel (top-left at x, y). Returns an Image. */
+export function makePanel(scene, x, y, w, h, opts = {}) {
+  return addPanel(scene, x, y, w, h, opts);
+}
+
+/** Maps legacy colour numbers used around the codebase to button skins. */
+const SKIN_BY_COLOR = {
+  [COLORS.gold]: 'yellow',
+  [COLORS.mint]: 'green',
+  [COLORS.pink]: 'pink',
+  [COLORS.rare]: 'blue',
+  [COLORS.epic]: 'purple',
+  0xe8324b: 'red',
+  0xc9bfd6: 'gray',
+  0x8d7aa3: 'gray',
+  0x9aa0a6: 'gray',
+  0x3fa9f5: 'blue'
+};
+
+/** True when `obj` sits in a ScrollList and the pointer is outside its window. */
+function outsideScroll(obj, p) {
+  for (let n = obj.parentContainer; n; n = n.parentContainer) {
+    if (n.scrollList) return !n.scrollList.contains(p);
   }
-  g.fillStyle(color, alpha);
-  g.fillRoundedRect(x, y, w, h, radius);
-  if (strokeWidth) {
-    g.lineStyle(strokeWidth, stroke, 1);
-    g.strokeRoundedRect(x, y, w, h, radius);
-  }
-  return g;
-}
-
-export function makePanel(scene, x, y, w, h, opts) {
-  const g = scene.add.graphics();
-  drawPanel(g, x, y, w, h, opts);
-  return g;
+  return false;
 }
 
 /**
- * Pill button with press animation and click sound.
- * Returns a Container with `.setEnabled(bool)`, `.setLabel(str)` helpers.
+ * Glossy bevelled 3D button with press animation and click sound.
+ * Options: w, h, skin ('yellow'|'green'|'blue'|'pink'|'purple'|'orange'|'red'|'gray')
+ * or legacy `color`, fontSize, icon, iconScale, sound.
+ * Returns a Container with `.setEnabled(bool)` and `.setLabel(str)`.
  */
 export function makeButton(scene, x, y, label, onClick, opts = {}) {
-  const { w = 220, h = 70, color = COLORS.pink, colorDark = COLORS.pinkDark, fontSize = 28, textColor = '#ffffff', icon = null, iconScale = 0.7, sound = 'click' } = opts;
+  const { w = 220, h = 70, fontSize = 28, textColor = '#ffffff', icon = null, iconScale = 0.7, sound = 'click' } = opts;
+  const w2 = Math.round(w);
+  const h2 = Math.round(h);
+  const skin = opts.skin || SKIN_BY_COLOR[opts.color] || 'yellow';
   const c = scene.add.container(x, y);
-  const g = scene.add.graphics();
-  const draw = (fill, dark, pressed = false) => {
-    g.clear();
-    const oy = pressed ? 4 : 0;
-    g.fillStyle(dark, 1);
-    g.fillRoundedRect(-w / 2, -h / 2 + 6, w, h, h / 2.6);
-    g.fillStyle(fill, 1);
-    g.fillRoundedRect(-w / 2, -h / 2 + oy, w, h - 2, h / 2.6);
-    g.fillStyle(0xffffff, 0.25);
-    g.fillRoundedRect(-w / 2 + 10, -h / 2 + oy + 6, w - 20, h * 0.28, h / 6);
-    g.lineStyle(3, COLORS.panelDark, 1);
-    g.strokeRoundedRect(-w / 2, -h / 2 + oy, w, h - 2 + (pressed ? 2 : 6) - oy, h / 2.6);
-  };
-  draw(color, colorDark);
-  c.add(g);
+  const up = buttonKey(scene, w2, h2, skin, false);
+  const down = buttonKey(scene, w2, h2, skin, true);
+  const off = buttonKey(scene, w2, h2, 'gray', false);
+  const bg = uiImage(scene, -w2 / 2 - 6, -h2 / 2 - 4, up);
+  c.add(bg);
 
   let iconImg = null;
-  const txt = scene.add.text(0, -2, label, textStyle(fontSize, textColor, { stroke: '#3d2a52', strokeThickness: 4, align: 'center' })).setOrigin(0.5);
+  const txt = scene.add.text(0, -2, label, displayStyle(fontSize, textColor, { stroke: INK, strokeThickness: Math.max(4, fontSize / 5), align: 'center' })).setOrigin(0.5);
+  txt.setShadow(0, 3, INK, 0, true, false);
   if (icon) {
     iconImg = scene.add.image(0, -2, icon).setScale(iconScale);
     c.add(iconImg);
@@ -78,25 +88,29 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   };
   layout();
 
-  c.setSize(w, h + 6);
+  c.setSize(w2, h2 + 8);
   c.setInteractive({ useHandCursor: true });
   let enabled = true;
   let pressed = false;
   let downAt = null;
+  const setFace = (isDown) => {
+    bg.setTexture(enabled ? (isDown ? down : up) : off);
+    const dy = isDown ? 3 : -2;
+    txt.y = dy;
+    if (iconImg) iconImg.y = dy;
+  };
 
   c.on('pointerdown', (p) => {
     if (!enabled) return;
     pressed = true;
     downAt = { x: p.x / RES, y: p.y / RES };
-    draw(color, colorDark, true);
-    txt.y = 2;
-    if (iconImg) iconImg.y = 2;
+    setFace(true);
+    scene.tweens.add({ targets: c, scaleX: 0.97, scaleY: 0.97, duration: 60 });
   });
   const release = () => {
     pressed = false;
-    draw(enabled ? color : 0xb9b1c2, enabled ? colorDark : 0x8d8399);
-    txt.y = -2;
-    if (iconImg) iconImg.y = -2;
+    setFace(false);
+    c.setScale(1);
   };
   c.on('pointerout', release);
   c.on('pointerup', (p) => {
@@ -104,14 +118,16 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     const moved = downAt ? Phaser.Math.Distance.Between(p.x / RES, p.y / RES, downAt.x, downAt.y) : 0;
     release();
     if (moved > 14) return; // it was a scroll drag, not a tap
+    if (outsideScroll(c, p)) return; // tapped where the list is clipped
     if (sound) Services.audio?.play(sound);
+    scene.tweens.add({ targets: c, scaleX: 1.06, scaleY: 1.06, duration: 90, yoyo: true });
     onClick?.(c);
   });
 
   c.setEnabled = (on) => {
     enabled = on;
     release();
-    c.setAlpha(on ? 1 : 0.75);
+    c.setAlpha(on ? 1 : 0.85);
     return c;
   };
   c.setLabel = (str) => {
@@ -119,37 +135,48 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     layout();
     return c;
   };
+  c.setIcon = (key) => {
+    iconImg?.setTexture(key);
+    layout();
+    return c;
+  };
   c.label = txt;
   return c;
 }
 
-/** Small circular icon button (close, mute, leaderboard...). */
-export function makeIconButton(scene, x, y, glyph, onClick, { size = 56, color = COLORS.panel, textColor = COLORS.text } = {}) {
+/** Round glossy icon button (close, mute, leaderboard...). */
+export function makeIconButton(scene, x, y, glyph, onClick, { size = 56, skin = 'cream', textColor = COLORS.text, color } = {}) {
+  const sk = color !== undefined ? SKIN_BY_COLOR[color] || skin : skin;
   const c = scene.add.container(x, y);
-  const g = scene.add.graphics();
-  g.fillStyle(0x000000, 0.2);
-  g.fillCircle(2, 4, size / 2);
-  g.fillStyle(color, 1);
-  g.fillCircle(0, 0, size / 2);
-  g.lineStyle(3, COLORS.panelDark, 1);
-  g.strokeCircle(0, 0, size / 2);
-  const t = scene.add.text(0, 0, glyph, textStyle(size * 0.45, textColor)).setOrigin(0.5);
-  c.add([g, t]);
+  const up = roundKey(scene, size, sk, false);
+  const down = roundKey(scene, size, sk, true);
+  const bg = uiImage(scene, -size / 2 - 6, -size / 2 - 4, up);
+  const light = sk !== 'cream' && sk !== 'gray';
+  const t = scene.add.text(0, -1, glyph, displayStyle(size * 0.46, light ? '#ffffff' : textColor, light ? { stroke: INK, strokeThickness: 4 } : {})).setOrigin(0.5);
+  c.add([bg, t]);
   c.setSize(size, size);
   c.setInteractive({ useHandCursor: true });
-  c.on('pointerdown', () => c.setScale(0.9));
-  c.on('pointerout', () => c.setScale(1));
+  c.on('pointerdown', () => {
+    bg.setTexture(down);
+    t.y = 2;
+  });
+  const reset = () => {
+    bg.setTexture(up);
+    t.y = -1;
+  };
+  c.on('pointerout', reset);
   c.on('pointerup', () => {
-    c.setScale(1);
+    reset();
     Services.audio?.play('click');
+    scene.tweens.add({ targets: c, scale: 1.12, duration: 80, yoyo: true });
     onClick?.(c);
   });
   c.glyph = t;
   return c;
 }
 
-/** Horizontal progress bar. Returns an object with `set(ratio)`. */
-export function makeProgressBar(scene, x, y, w, h, { fill = COLORS.mint, back = 0xe8dccb, radius } = {}) {
+/** Glossy horizontal progress bar. Returns an object with `set(ratio)`. */
+export function makeProgressBar(scene, x, y, w, h, { fill = COLORS.mint, back = 0x3a2650, radius } = {}) {
   const g = scene.add.graphics({ x, y });
   const r = radius ?? h / 2;
   const bar = {
@@ -157,15 +184,20 @@ export function makeProgressBar(scene, x, y, w, h, { fill = COLORS.mint, back = 
     set(ratio) {
       const v = Phaser.Math.Clamp(ratio, 0, 1);
       g.clear();
-      g.fillStyle(back, 1);
+      g.fillStyle(back, 0.85);
       g.fillRoundedRect(0, 0, w, h, r);
+      g.fillStyle(0x000000, 0.25);
+      g.fillRoundedRect(2, 2, w - 4, h * 0.4, r / 2);
       if (v > 0) {
+        const fw = Math.max(h, w * v);
         g.fillStyle(fill, 1);
-        g.fillRoundedRect(0, 0, Math.max(h, w * v), h, r);
-        g.fillStyle(0xffffff, 0.3);
-        g.fillRoundedRect(3, 2, Math.max(h - 6, w * v - 6), h * 0.35, r / 2);
+        g.fillRoundedRect(0, 0, fw, h, r);
+        g.fillStyle(0x000000, 0.15);
+        g.fillRoundedRect(0, h * 0.55, fw, h * 0.45, { tl: 0, tr: 0, bl: r, br: r });
+        g.fillStyle(0xffffff, 0.45);
+        g.fillRoundedRect(4, 3, Math.max(h - 8, fw - 8), h * 0.3, r / 2);
       }
-      g.lineStyle(2, COLORS.panelDark, 1);
+      g.lineStyle(3, 0x2d1b3d, 1);
       g.strokeRoundedRect(0, 0, w, h, r);
       return bar;
     }
@@ -174,49 +206,43 @@ export function makeProgressBar(scene, x, y, w, h, { fill = COLORS.mint, back = 
 }
 
 /**
- * Modal dialog: dims the screen, blocks input underneath, pops a panel in.
- * `content` is a Container positioned at the panel's top-left corner.
+ * Modal dialog: dims the screen, blocks input underneath, pops a textured
+ * panel in with a glossy title ribbon. `content` is a Container positioned at
+ * the panel's top-left corner. Auto-scales to fit narrow (portrait) screens.
  */
 export class Modal {
-  constructor(scene, { width = 720, height = 480, title = '', onClose = null, closable = true, depth = 1000 } = {}) {
+  constructor(scene, { width = 720, height = 480, title = '', onClose = null, closable = true, depth = 1000, ribbon = 'pink' } = {}) {
     this.scene = scene;
     this.onClose = onClose;
     this.width = width;
     this.height = height;
     this.root = scene.add.container(0, 0).setDepth(depth);
 
-    this.blocker = scene.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x1a1024, 0.65).setInteractive();
+    this.blocker = scene.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x14081f, 0.7).setInteractive();
     this.root.add(this.blocker);
 
     this.panel = scene.add.container(WIDTH / 2, HEIGHT / 2);
-    const g = scene.add.graphics();
-    drawPanel(g, -width / 2, -height / 2, width, height, { radius: 28 });
-    this.panel.add(g);
+    this.panel.add(addPanel(scene, -width / 2, -height / 2, width, height, { radius: 32 }));
 
     if (title) {
-      const ribbon = scene.add.graphics();
-      ribbon.fillStyle(COLORS.pink, 1);
-      ribbon.fillRoundedRect(-Math.min(width - 80, 420) / 2, -height / 2 - 26, Math.min(width - 80, 420), 56, 24);
-      ribbon.lineStyle(4, COLORS.panelDark, 1);
-      ribbon.strokeRoundedRect(-Math.min(width - 80, 420) / 2, -height / 2 - 26, Math.min(width - 80, 420), 56, 24);
-      this.panel.add(ribbon);
-      this.panel.add(outlinedText(scene, 0, -height / 2 + 2, title, 30));
+      const rw = Math.min(width - 60, Math.max(300, title.length * 22 + 80));
+      this.panel.add(uiImage(scene, -rw / 2 - 6, -height / 2 - 34, buttonKey(scene, rw, 60, ribbon, false)));
+      this.panel.add(outlinedText(scene, 0, -height / 2 - 6, title, 34));
     }
 
     this.content = scene.add.container(-width / 2, -height / 2);
     this.panel.add(this.content);
 
     if (closable) {
-      this.closeBtn = makeIconButton(scene, width / 2 - 10, -height / 2 + 10, '✕', () => this.close(), { size: 52, color: COLORS.pink, textColor: '#ffffff' });
+      this.closeBtn = makeIconButton(scene, width / 2 - 8, -height / 2 + 8, '✕', () => this.close(), { size: 54, skin: 'red' });
       this.panel.add(this.closeBtn);
     }
     this.root.add(this.panel);
 
-    // Shrink to fit narrow (portrait) screens; content keeps its own coordinates.
-    this.fit = Math.min(1, (WIDTH - 24) / width, (HEIGHT - 70) / (height + 40));
+    this.fit = Math.min(1, (WIDTH - 24) / width, (HEIGHT - 80) / (height + 50));
     this.panel.fitScale = this.fit;
     this.panel.setScale(0.6 * this.fit).setAlpha(0);
-    scene.tweens.add({ targets: this.panel, scale: this.fit, alpha: 1, duration: 260, ease: 'Back.easeOut' });
+    scene.tweens.add({ targets: this.panel, scale: this.fit, alpha: 1, duration: 280, ease: 'Back.easeOut' });
     this.blocker.setAlpha(0);
     scene.tweens.add({ targets: this.blocker, alpha: 1, duration: 200 });
   }
@@ -275,26 +301,38 @@ export class ScrollList {
     this.top = y;
     this.contentScale = ws;
 
+    // World-space view rectangle (for drag start and tap guarding).
+    this.view = new Phaser.Geom.Rectangle(wx, wy, w * ws, h * ws);
+    this.inner.scrollList = this;
+
+    // Drags may start anywhere inside the view - even on a button.
     const zone = scene.add.zone(x, y, w, h).setOrigin(0).setInteractive();
     parent.add(zone);
     parent.sendToBack?.(zone);
     let startY = 0;
     let startScroll = 0;
     this.scroll = 0;
-    zone.on('pointerdown', (p) => {
+    this._onDown = (p) => {
+      if (!this.contains(p)) return;
       startY = p.y / RES;
       startScroll = this.scroll;
       this.dragging = true;
-    });
+    };
     this._onMove = (p) => {
       if (!this.dragging || !p.isDown) return;
       this.setScroll(startScroll + (startY - p.y / RES) / this.contentScale);
     };
     this._onUp = () => (this.dragging = false);
+    scene.input.on('pointerdown', this._onDown);
     scene.input.on('pointermove', this._onMove);
     scene.input.on('pointerup', this._onUp);
     zone.on('wheel', (_p, _dx, dy) => this.setScroll(this.scroll + dy * 0.6));
     this.zone = zone;
+  }
+
+  /** True when a pointer is inside the visible scroll window. */
+  contains(p) {
+    return this.view.contains(p.x / RES, p.y / RES);
   }
 
   setContentHeight(h) {
@@ -305,9 +343,17 @@ export class ScrollList {
   setScroll(v) {
     this.scroll = Phaser.Math.Clamp(v, 0, Math.max(0, this.contentH - this.viewH));
     this.inner.y = this.top - this.scroll;
+    // Hide rows that are fully scrolled out (they also stop taking input).
+    for (const child of this.inner.list) {
+      const h = child.rowHeight ?? 0;
+      if (!h) continue;
+      const top = child.y - this.scroll;
+      child.setVisible(top + h > 0 && top < this.viewH);
+    }
   }
 
   destroy() {
+    this.scene.input.off('pointerdown', this._onDown);
     this.scene.input.off('pointermove', this._onMove);
     this.scene.input.off('pointerup', this._onUp);
     this.maskShape.destroy();
@@ -315,30 +361,33 @@ export class ScrollList {
 }
 
 /**
- * Coins / Tickets / Keys bar that live-updates from SAVE_CHANGED events and
- * animates count changes.
+ * Currency bar (coins, gems, tickets, keys): dark glass pills with the icon
+ * overlapping the left edge and a green "+" that opens the shop. Live-updates
+ * from SAVE_CHANGED and animates count changes.
  */
 export class CurrencyBar {
-  constructor(scene, x, y, { compact = WIDTH < 1000 } = {}) {
+  constructor(scene, x, y, { compact = WIDTH < 1000, shop = true } = {}) {
     this.scene = scene;
     this.root = scene.add.container(x, y).setDepth(50);
     this.values = {};
     const defs = [
-      ['popCoins', 'coin', 0.62],
-      ['blindBoxTickets', 'ticket', 0.6],
-      ['goldenKeys', 'key', 0.65]
+      ['popCoins', 'coin', 0.66],
+      ['gems', 'gem', 0.62],
+      ['blindBoxTickets', 'ticket', 0.58],
+      ['goldenKeys', 'key', 0.62]
     ];
-    const pillW = compact ? 148 : 170;
+    const pillW = compact ? 134 : 160;
+    const gap = compact ? 10 : 18;
     defs.forEach(([key, tex, scale], i) => {
-      const cx = i * (pillW + (compact ? 10 : 20));
-      const g = scene.add.graphics();
-      g.fillStyle(0x000000, 0.25);
-      g.fillRoundedRect(cx, 0, pillW, 46, 23);
-      g.lineStyle(3, 0xffffff, 0.5);
-      g.strokeRoundedRect(cx, 0, pillW, 46, 23);
-      const icon = scene.add.image(cx + 26, 23, tex).setScale(scale);
-      const label = scene.add.text(cx + 54, 23, '0', textStyle(24, '#ffffff', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0, 0.5);
-      this.root.add([g, icon, label]);
+      const cx = i * (pillW + gap);
+      const pill = uiImage(scene, cx + 14, 2, pillKey(scene, pillW - 14, 40));
+      const icon = scene.add.image(cx + 18, 24, tex).setScale(scale);
+      const label = scene.add.text(cx + 40, 24, '0', displayStyle(24, '#ffffff', { stroke: INK, strokeThickness: 5 })).setOrigin(0, 0.5);
+      this.root.add([pill, icon, label]);
+      if (shop && (key === 'popCoins' || key === 'gems')) {
+        const plus = makeIconButton(scene, cx + pillW - 16, 24, '+', () => scene.scene.start('Shop', { tab: key === 'gems' ? 'gems' : 'deals' }), { size: 30, skin: 'green' });
+        this.root.add(plus);
+      }
       this.values[key] = { label, icon, shown: Services.save.getCurrency(key) };
       label.setText(this._fmt(this.values[key].shown));
     });
@@ -366,7 +415,8 @@ export class CurrencyBar {
         ease: 'Cubic.easeOut',
         onUpdate: () => v.label.setText(this._fmt(Math.round(counter.val)))
       });
-      this.scene.tweens.add({ targets: v.icon, scale: v.icon.scale * 1.3, yoyo: true, duration: 140 });
+      const base = v.icon.scale;
+      this.scene.tweens.add({ targets: v.icon, scale: base * 1.35, yoyo: true, duration: 140 });
     }
   }
 

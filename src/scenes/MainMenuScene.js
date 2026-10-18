@@ -5,13 +5,13 @@
  * "Welcome Back!" offline-earnings dialog once per app session.
  */
 import Phaser from 'phaser';
-import { WIDTH, HEIGHT, COLORS, EVENTS, ECONOMY, LUCKY_SPIN } from '../config/GameConfig.js';
-import { CATALOG } from '../config/GachaDropTable.js';
+import { WIDTH, HEIGHT, COLORS, EVENTS, LUCKY_SPIN } from '../config/GameConfig.js';
+import { CATALOG, packSplit } from '../config/GachaDropTable.js';
 import { getQuestTemplate, REWARD_LABELS } from '../config/QuestCatalog.js';
 import { Services } from '../systems/Services.js';
 import { IdleRewardManager } from '../systems/IdleRewardManager.js';
 import { msUntilMidnight } from '../systems/QuestManager.js';
-import { buyTicket } from '../systems/GachaSystem.js';
+import { chooseCost, pityStatus } from '../systems/GachaSystem.js';
 import { showRewardedAd } from '../systems/AdService.js';
 import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
@@ -28,11 +28,12 @@ import {
   ScrollList,
   outlinedText,
   textStyle,
+  displayStyle,
   floatText,
   flyCoins
 } from '../ui/UIKit.js';
 
-const REWARD_ICON = { popCoins: 'coin', blindBoxTickets: 'ticket', goldenKeys: 'key' };
+const REWARD_ICON = { popCoins: 'coin', blindBoxTickets: 'ticket', goldenKeys: 'key', gems: 'gem' };
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -100,7 +101,8 @@ export class MainMenuScene extends Phaser.Scene {
         play: [cx, 320],
         best: [cx, 410],
         quests: [cx - 125, 490],
-        collection: [cx, 560],
+        shop: [cx, 572],
+        collection: [cx, 640],
         box: { x: WIDTH - 400, y: 90, s: 1 },
         bank: { x: WIDTH - 400, y: 430, s: 1 }
       };
@@ -117,6 +119,7 @@ export class MainMenuScene extends Phaser.Scene {
       heroName: [WIDTH / 2, feet + 30],
       showroom: [WIDTH - 110, feet - 150, 180],
       spin: [110, feet - 150],
+      shop: [WIDTH - 110, feet - 72],
       logo: [WIDTH / 2, 190, 84],
       subtitle: [WIDTH / 2, 252],
       play: [WIDTH / 2, panelsY - 225],
@@ -208,6 +211,11 @@ export class MainMenuScene extends Phaser.Scene {
     this.tweens.add({ targets: this.spinBadge, scale: 1.25, yoyo: true, repeat: -1, duration: 420 });
 
     this.collectionText = this.add.text(...L.collection, '', textStyle(20, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
+
+    // Shop: skins, boxes, deals and gems
+    const [shx, shy] = L.shop;
+    this.shopBtn = makeButton(this, shx, shy, 'SHOP', () => this.go('Shop'), { w: L.portrait ? 180 : 230, h: 64, fontSize: 30, skin: 'purple', icon: 'gem', iconScale: 0.75 });
+    this.tweens.add({ targets: this.shopBtn, angle: { from: -2, to: 2 }, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
   }
 
   buildBoxPanel() {
@@ -216,34 +224,21 @@ export class MainMenuScene extends Phaser.Scene {
     this.boxPanel = c;
     const w = 370;
     const h = 320;
-    c.add(makePanel(this, 0, 0, w, h));
-    c.add(this.add.text(w / 2, 26, 'Blind Box', textStyle(28)).setOrigin(0.5));
-    this.boxImg = this.add.image(95, 150, 'box_icon').setScale(1.15);
-    c.add(this.boxImg);
-    this.tweens.add({ targets: this.boxImg, y: 140, yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.easeInOut' });
-    this.pityText = this.add.text(95, 232, '', textStyle(15, '#7a6a8a', { align: 'center' })).setOrigin(0.5);
+    c.add(makePanel(this, 0, 0, w, h, { header: 0xff4f9a, headerH: 54 }));
+    c.add(outlinedText(this, w / 2, 28, 'Blind Box', 30));
+    const glow = this.add.image(95, 140, 'fx_glow').setScale(0.9).setTint(0xff8fb1).setAlpha(0.5);
+    this.boxImg = this.add.image(95, 140, 'box_icon_classic').setScale(1.15);
+    c.add([glow, this.boxImg]);
+    this.tweens.add({ targets: this.boxImg, y: 130, yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.easeInOut' });
+    const split = packSplit('classic');
+    c.add(this.add.text(95, 228, `Mystery ${split.mystery}%`, displayStyle(18, '#e0337f')).setOrigin(0.5));
+    this.pityText = this.add.text(95, 262, '', textStyle(14, '#7a6a8a', { align: 'center' })).setOrigin(0.5);
     c.add(this.pityText);
 
-    this.openBtn = makeButton(this, 268, 100, 'Open', () => this.openBox('ticket'), { w: 170, h: 60, fontSize: 26, icon: 'ticket', iconScale: 0.55 });
-    this.buyBtn = makeButton(this, 268, 172, `${ECONOMY.TICKET_PRICE_COINS}`, () => this.buyTicket(), {
-      w: 170,
-      h: 56,
-      fontSize: 22,
-      icon: 'coin',
-      iconScale: 0.55,
-      color: COLORS.mint,
-      colorDark: 0x4fb594
-    });
-    this.keyBtn = makeButton(this, 268, 262, 'Key Box', () => this.openBox('key'), {
-      w: 170,
-      h: 56,
-      fontSize: 22,
-      icon: 'key',
-      iconScale: 0.55,
-      color: COLORS.epic,
-      colorDark: 0x7a3dcc
-    });
-    c.add([this.openBtn, this.buyBtn, this.add.text(268, 208, 'buy a ticket', textStyle(14, '#7a6a8a')).setOrigin(0.5), this.keyBtn]);
+    this.openBtn = makeButton(this, 268, 98, 'Open', () => this.openBox('classic'), { w: 170, h: 60, fontSize: 26, icon: 'ticket', iconScale: 0.55, skin: 'yellow' });
+    this.keyBtn = makeButton(this, 268, 176, 'Sparkle', () => this.openBox('sparkle', 'goldenKeys'), { w: 170, h: 56, fontSize: 22, icon: 'key', iconScale: 0.55, skin: 'blue' });
+    this.boxShopBtn = makeButton(this, 268, 262, 'All Boxes', () => this.go('Shop', { tab: 'boxes' }), { w: 170, h: 56, fontSize: 21, skin: 'pink' });
+    c.add([this.openBtn, this.keyBtn, this.boxShopBtn]);
   }
 
   buildIdleBank() {
@@ -252,8 +247,8 @@ export class MainMenuScene extends Phaser.Scene {
     this.bankPanel = c;
     const w = 370;
     const h = 270;
-    c.add(makePanel(this, 0, 0, w, h));
-    c.add(this.add.text(w / 2, 26, 'Pop Bank', textStyle(28)).setOrigin(0.5));
+    c.add(makePanel(this, 0, 0, w, h, { header: 0xffa000, headerH: 54 }));
+    c.add(outlinedText(this, w / 2, 28, 'Pop Bank', 30));
     this.bankCoinIcon = this.add.image(60, 92, 'coin').setScale(1.3);
     this.tweens.add({ targets: this.bankCoinIcon, scaleX: { from: 1.3, to: -1.3 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.bankAmount = this.add.text(100, 80, '0', textStyle(42, '#c98a00', { stroke: '#3d2a52', strokeThickness: 5 })).setOrigin(0, 0.5);
@@ -285,13 +280,14 @@ export class MainMenuScene extends Phaser.Scene {
     this.heroName.setText(CATALOG[d.equipped.baseDoll]?.name || 'Labubu');
     this.bestText.setText(`Best score: ${d.stats.highScore.toLocaleString('en-US')}`);
     this.spinBadge.setVisible(canSpin(Services.save));
-    const tickets = d.currencies.blindBoxTickets;
-    this.openBtn.setEnabled(tickets > 0);
-    this.buyBtn.setEnabled(d.currencies.popCoins >= ECONOMY.TICKET_PRICE_COINS);
+    // Pay with a ticket when you have one, otherwise with coins.
+    const cost = chooseCost(Services.save, 'classic');
+    const coins = cost?.currency === 'popCoins';
+    this.openBtn.setIcon(coins ? 'coin' : 'ticket').setLabel(coins ? `${cost.amount}` : 'Open');
+    this.openBtn.setEnabled(Boolean(cost));
     this.keyBtn.setVisible(d.currencies.goldenKeys > 0);
-    const epicIn = 10 - d.pityCounter.pullsSinceLastEpic;
-    const secretIn = 50 - d.pityCounter.pullsSinceLastSecret;
-    this.pityText.setText(`Epic+ in ≤ ${epicIn}\nSecret in ≤ ${secretIn}`);
+    const pity = pityStatus(Services.save, 'classic');
+    this.pityText.setText(`Epic+ within ${pity.epic}\nLegendary within ${pity.legendary}`);
     const claimable = Services.quests.claimableCount();
     this.questBadge.setVisible(claimable > 0);
     this.questBadgeText.setText(String(claimable));
@@ -345,25 +341,14 @@ export class MainMenuScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(sceneKey, data));
   }
 
-  openBox(source) {
-    const d = Services.save.data;
-    const has = source === 'key' ? d.currencies.goldenKeys > 0 : d.currencies.blindBoxTickets > 0;
-    if (!has) {
+  openBox(packId, currency = null) {
+    const cost = chooseCost(Services.save, packId, currency);
+    if (!cost) {
       Services.audio.play('error');
-      Services.bus.emit('ui:toast', { text: 'No tickets left!', sub: 'Find them while running or buy one with coins', color: COLORS.pink });
+      Services.bus.emit('ui:toast', { text: 'No tickets left!', sub: 'Find them while running or visit the Shop', color: COLORS.pink });
       return;
     }
-    this.go('Unboxing', { source });
-  }
-
-  buyTicket() {
-    if (buyTicket(Services.save)) {
-      Services.audio.play('ticket');
-      const pt = this.panelPoint(this.boxPanel, 268, 170);
-      floatText(this, pt.x, pt.y, '+1 ticket', '#ff8fb1');
-    } else {
-      Services.audio.play('error');
-    }
+    this.go('Unboxing', { packId, currency: cost.currency });
   }
 
   collectIdle(multiplier) {
@@ -516,8 +501,8 @@ export class MainMenuScene extends Phaser.Scene {
           onClaim();
         } else if (!done) {
           // "Go!" jumps straight to where the quest is played.
-          const boxQuest = tpl?.event === EVENTS.BOX_OPENED && Services.save.data.currencies.blindBoxTickets > 0;
-          this.go(boxQuest ? 'Unboxing' : 'Runner', boxQuest ? { source: 'ticket' } : undefined);
+          const boxQuest = tpl?.event === EVENTS.BOX_OPENED;
+          this.go(boxQuest ? 'Shop' : 'Runner', boxQuest ? { tab: 'boxes' } : undefined);
         }
       },
       { w: 130, h: 50, fontSize: 22, color: done ? COLORS.gold : COLORS.mint, colorDark: done ? COLORS.goldDark : 0x4fb594 }
@@ -675,12 +660,12 @@ export class MainMenuScene extends Phaser.Scene {
       const a = (i + 0.5) * seg;
       const t = outlinedText(this, Math.cos(a) * R * 0.66, Math.sin(a) * R * 0.66, s.label, 26, '#ffffff');
       t.setRotation(a + Math.PI / 2);
-      const icon = { popCoins: 'coin', blindBoxTickets: 'ticket', goldenKeys: 'key' }[s.reward.type];
+      const icon = REWARD_ICON[s.reward.type];
       const ic = this.add.image(Math.cos(a) * R * 0.38, Math.sin(a) * R * 0.38, icon).setScale(0.55).setRotation(a + Math.PI / 2);
       wheel.add([t, ic]);
     });
     const hub = this.add.circle(0, 0, 40, 0xfff4e6).setStrokeStyle(6, COLORS.panelDark);
-    wheel.add([hub, this.add.image(0, 0, 'box_icon').setScale(0.42)]);
+    wheel.add([hub, this.add.image(0, 0, 'box_icon_classic').setScale(0.42)]);
     // Pointer at the top
     const ptr = this.add.graphics();
     ptr.fillStyle(0xe8324b, 1).fillTriangle(cx - 22, cy - R - 26, cx + 22, cy - R - 26, cx, cy - R + 18);
@@ -716,7 +701,7 @@ export class MainMenuScene extends Phaser.Scene {
           onComplete: () => {
             Services.audio.play('spinWin');
             const r = result.segment.reward;
-            const label = { popCoins: 'Pop Coins', blindBoxTickets: r.amount > 1 ? 'Tickets' : 'Ticket', goldenKeys: 'Golden Key' }[r.type];
+            const label = { popCoins: 'Pop Coins', blindBoxTickets: r.amount > 1 ? 'Tickets' : 'Ticket', goldenKeys: 'Golden Key', gems: 'Gems' }[r.type];
             status.setText(`You won ${r.amount} ${label}!`).setColor('#e0567f');
             floatText(this, WIDTH / 2, HEIGHT / 2, `+${r.amount} ${label}`, '#ffe066', 40);
             this.spinBadge.setVisible(false);

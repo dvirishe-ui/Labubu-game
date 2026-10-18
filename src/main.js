@@ -4,6 +4,9 @@
  * audio), wires app-lifecycle hooks for mobile, and boots Phaser.
  */
 import Phaser from 'phaser';
+// Bundled fonts (no network): chunky display face + rounded body face.
+import '@fontsource/lilita-one/latin-400.css';
+import '@fontsource/fredoka/latin-600.css';
 import { WIDTH, HEIGHT, RES, COLORS, updateViewport } from './config/GameConfig.js';
 import { DisplayPlugin } from './ui/Display.js';
 import { Services } from './systems/Services.js';
@@ -20,6 +23,7 @@ import { MainMenuScene } from './scenes/MainMenuScene.js';
 import { RunnerScene } from './scenes/RunnerScene.js';
 import { UnboxingScene } from './scenes/UnboxingScene.js';
 import { ShowroomScene } from './scenes/ShowroomScene.js';
+import { ShopScene } from './scenes/ShopScene.js';
 import { UIOverlayScene } from './scenes/UIOverlayScene.js';
 
 /** Creates every singleton system and registers it in the Services locator. */
@@ -88,10 +92,24 @@ const config = {
   // Phaser caps frame delta at 1000/min ms; RunnerScene uses the same cap.
   fps: { target: 60, min: 10 },
   // UIOverlay is last so it always renders on top of every other scene.
-  scene: [BootScene, PreloaderScene, MainMenuScene, RunnerScene, UnboxingScene, ShowroomScene, UIOverlayScene]
+  scene: [BootScene, PreloaderScene, MainMenuScene, RunnerScene, UnboxingScene, ShowroomScene, ShopScene, UIOverlayScene]
 };
 
-const game = new Phaser.Game(config);
+/**
+ * Canvas text and the procedural textures need the web fonts ready before the
+ * first frame; wait for them (briefly - never block the game on a font).
+ */
+async function loadFonts() {
+  if (!document.fonts?.load) return;
+  const fonts = Promise.all([document.fonts.load('32px "Lilita One"'), document.fonts.load('600 32px Fredoka')]);
+  await Promise.race([fonts, new Promise((r) => setTimeout(r, 2500))]).catch(() => {});
+}
+
+let game = null;
+loadFonts().then(() => {
+  game = new Phaser.Game(config);
+  if (import.meta.env.DEV) window.__LABUBU__ = { game, Services };
+});
 
 /**
  * Both orientations play full screen. When the phone rotates (or the window is
@@ -102,7 +120,7 @@ let resizeTimer = null;
 function handleViewportChange() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    if (!updateViewport()) return;
+    if (!game || !updateViewport()) return;
     // setGameSize (unlike resize) also updates the FIT aspect ratio.
     game.scale.setGameSize(Math.round(WIDTH * RES), Math.round(HEIGHT * RES));
     for (const scene of game.scene.getScenes(true)) {
@@ -117,5 +135,3 @@ function handleViewportChange() {
 window.addEventListener('resize', handleViewportChange);
 window.addEventListener('orientationchange', handleViewportChange);
 
-// Handy for debugging from the devtools console.
-if (import.meta.env.DEV) window.__LABUBU__ = { game, Services };

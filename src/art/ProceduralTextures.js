@@ -5,6 +5,7 @@
  * Nothing is loaded from disk, so there are no broken image links - ever.
  */
 import { WIDTH, HEIGHT } from '../config/GameConfig.js';
+import { PACKS, PACK_ORDER } from '../config/GachaDropTable.js';
 
 /** Creates a canvas texture, runs `draw(ctx, w, h)` and uploads it. */
 export function canvasTexture(scene, key, w, h, draw) {
@@ -127,6 +128,59 @@ function makePickups(scene) {
     ctx.strokeRect(12, 2, 4, 7);
     ctx.fillRect(17, 2, 3, 5);
     ctx.strokeRect(17, 2, 3, 5);
+  });
+
+  // Gem: faceted pink-violet crystal (premium currency)
+  canvasTexture(scene, 'gem', 48, 48, (ctx) => {
+    const top = 12;
+    const mid = 20;
+    const pts = { tl: [9, top], tr: [39, top], l: [3, mid], r: [45, mid], b: [24, 44] };
+    // Outline silhouette
+    ctx.beginPath();
+    ctx.moveTo(...pts.tl);
+    ctx.lineTo(...pts.tr);
+    ctx.lineTo(...pts.r);
+    ctx.lineTo(...pts.b);
+    ctx.lineTo(...pts.l);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, top, 0, 44);
+    g.addColorStop(0, '#ffb8f0');
+    g.addColorStop(0.5, '#d65cff');
+    g.addColorStop(1, '#7a2bd6');
+    ctx.fillStyle = g;
+    ctx.fill();
+    // Facets
+    const facet = (poly, color) => {
+      ctx.beginPath();
+      poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+    facet([pts.tl, [24, top], [16, mid], pts.l], 'rgba(255,255,255,0.55)');
+    facet([[24, top], pts.tr, pts.r, [32, mid]], 'rgba(255,255,255,0.25)');
+    facet([[24, top], [32, mid], [16, mid]], 'rgba(255,255,255,0.7)');
+    facet([pts.l, [16, mid], pts.b], 'rgba(255,255,255,0.18)');
+    facet([[32, mid], pts.r, pts.b], 'rgba(60,0,110,0.28)');
+    ctx.beginPath();
+    ctx.moveTo(...pts.tl);
+    ctx.lineTo(...pts.tr);
+    ctx.lineTo(...pts.r);
+    ctx.lineTo(...pts.b);
+    ctx.lineTo(...pts.l);
+    ctx.closePath();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#4a1170';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(...pts.l);
+    ctx.lineTo(...pts.r);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(74,17,112,0.55)';
+    ctx.stroke();
+    // Twinkle
+    ctx.fillStyle = '#ffffff';
+    star(ctx, 14, 9, 5, 1.5);
   });
 
   // Super Magnet power-up
@@ -486,117 +540,217 @@ function makeParticles(scene) {
 
 // ---------------------------------------------------------------------------- blind box
 
-/** Draws the isometric Pop Mart-style blind box (front + side + top faces). */
-function drawBox(ctx, { lid = true } = {}) {
+/**
+ * Draws the isometric Pop Mart-style blind box (front + side + top faces) in
+ * a pack's colours: glossy gradient faces, a quilted pattern, embossed "?"
+ * medallion, foil-stamped brand label and a specular highlight.
+ */
+function drawBox(ctx, { lid = true, colors = PACKS.classic.colors, pack = 'classic' } = {}) {
   const fx = 20;
   const fy = 60;
   const fw = 150;
   const fh = 180;
   const depth = 46;
+  const C = colors;
+
+  // Soft contact shadow baked under the box
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.ellipse(fx + fw / 2 + depth / 2, fy + fh + 2, fw * 0.62, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // Side face
-  ctx.beginPath();
-  ctx.moveTo(fx + fw, fy);
-  ctx.lineTo(fx + fw + depth, fy - depth * 0.6);
-  ctx.lineTo(fx + fw + depth, fy + fh - depth * 0.6);
-  ctx.lineTo(fx + fw, fy + fh);
-  ctx.closePath();
+  const side = () => {
+    ctx.beginPath();
+    ctx.moveTo(fx + fw, fy);
+    ctx.lineTo(fx + fw + depth, fy - depth * 0.6);
+    ctx.lineTo(fx + fw + depth, fy + fh - depth * 0.6);
+    ctx.lineTo(fx + fw, fy + fh);
+    ctx.closePath();
+  };
+  side();
   const sg = ctx.createLinearGradient(fx + fw, 0, fx + fw + depth, 0);
-  sg.addColorStop(0, '#e05b86');
-  sg.addColorStop(1, '#b8406a');
+  sg.addColorStop(0, C.side[0]);
+  sg.addColorStop(1, C.side[1]);
   ctx.fillStyle = sg;
   ctx.fill();
+  ctx.save();
+  side();
+  ctx.clip();
+  // Side stripes
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 5;
+  for (let i = -2; i < 10; i++) {
+    ctx.beginPath();
+    ctx.moveTo(fx + fw, fy + i * 24);
+    ctx.lineTo(fx + fw + depth, fy + i * 24 - depth * 0.6 + 14);
+    ctx.stroke();
+  }
+  ctx.restore();
+  side();
   ctx.strokeStyle = OUTLINE;
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Side face polka dots
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  for (let i = 0; i < 6; i++) {
-    ctx.beginPath();
-    ctx.arc(fx + fw + 14 + (i % 2) * 18, fy + 20 + i * 26 - (i % 2) * 8, 5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   // Front face
   const fg = ctx.createLinearGradient(0, fy, 0, fy + fh);
-  fg.addColorStop(0, '#ffd0de');
-  fg.addColorStop(1, '#ff8fb1');
+  fg.addColorStop(0, C.front[0]);
+  fg.addColorStop(1, C.front[1]);
   ctx.fillStyle = fg;
   ctx.fillRect(fx, fy, fw, fh);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(fx, fy, fw, fh);
+  ctx.clip();
+  // Quilted diamond pattern
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 1.5;
+  for (let i = -10; i < 12; i++) {
+    ctx.beginPath();
+    ctx.moveTo(fx + i * 22, fy);
+    ctx.lineTo(fx + i * 22 + fh, fy + fh);
+    ctx.moveTo(fx + i * 22, fy);
+    ctx.lineTo(fx + i * 22 - fh, fy + fh);
+    ctx.stroke();
+  }
+  // Tiny stars on the premium packs
+  if (pack !== 'classic') {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    for (let i = 0; i < 9; i++) {
+      const sx = fx + 14 + ((i * 53) % (fw - 24));
+      const sy = fy + 14 + ((i * 37) % (fh - 60));
+      star(ctx, sx, sy, 5, 2);
+    }
+  }
+  // Specular sheen
+  const sh = ctx.createLinearGradient(fx, fy, fx + fw, fy + fh);
+  sh.addColorStop(0, 'rgba(255,255,255,0.45)');
+  sh.addColorStop(0.35, 'rgba(255,255,255,0)');
+  sh.addColorStop(0.8, 'rgba(0,0,0,0)');
+  sh.addColorStop(1, 'rgba(0,0,0,0.12)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(fx, fy, fw, fh);
+  ctx.restore();
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = 3;
   ctx.strokeRect(fx, fy, fw, fh);
 
-  // Big question mark badge
+  // Embossed "?" medallion with a metallic ring
+  const mx = fx + fw / 2;
+  const my = fy + 84;
+  const ring = ctx.createLinearGradient(mx - 50, my - 50, mx + 50, my + 50);
+  ring.addColorStop(0, '#fff6c9');
+  ring.addColorStop(0.5, pack === 'sparkle' ? '#b9d3ff' : '#ffcf4a');
+  ring.addColorStop(1, pack === 'sparkle' ? '#5f86cf' : '#c98a00');
   ctx.beginPath();
-  ctx.arc(fx + fw / 2, fy + 84, 46, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
+  ctx.arc(mx, my, 50, 0, Math.PI * 2);
+  ctx.fillStyle = ring;
   ctx.fill();
   ctx.lineWidth = 3;
   ctx.stroke();
-  ctx.font = 'bold 68px Trebuchet MS, sans-serif';
+  const disc = ctx.createRadialGradient(mx - 14, my - 16, 4, mx, my, 42);
+  disc.addColorStop(0, '#ffffff');
+  disc.addColorStop(1, '#ffe9f1');
+  ctx.beginPath();
+  ctx.arc(mx, my, 41, 0, Math.PI * 2);
+  ctx.fillStyle = disc;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = '72px "Lilita One", Trebuchet MS, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#e0567f';
-  ctx.fillText('?', fx + fw / 2, fy + 88);
+  ctx.fillStyle = OUTLINE;
+  ctx.fillText('?', mx + 2, my + 7);
+  ctx.fillStyle = C.accent;
+  ctx.fillText('?', mx, my + 4);
 
-  // Brand label
-  rr(ctx, fx + 14, fy + 140, fw - 28, 28, 10);
-  ctx.fillStyle = '#3d2a52';
+  // Foil-stamped brand label
+  rr(ctx, fx + 12, fy + 140, fw - 24, 30, 10);
+  ctx.fillStyle = C.label;
   ctx.fill();
-  ctx.font = 'bold 18px Trebuchet MS, sans-serif';
-  ctx.fillStyle = '#ffe9c7';
-  ctx.fillText('LABUBU', fx + fw / 2, fy + 155);
-  ctx.font = 'bold 11px Trebuchet MS, sans-serif';
-  ctx.fillStyle = '#3d2a52';
-  ctx.fillText('THE MONSTERS', fx + fw / 2, fy + 30);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#ffd86b';
+  ctx.stroke();
+  const foil = ctx.createLinearGradient(fx, 0, fx + fw, 0);
+  foil.addColorStop(0, '#ffe9a8');
+  foil.addColorStop(0.5, '#ffffff');
+  foil.addColorStop(1, '#ffc93c');
+  ctx.font = '20px "Lilita One", Trebuchet MS, sans-serif';
+  ctx.fillStyle = foil;
+  ctx.fillText('LABUBU', mx, fy + 156);
+  ctx.font = '600 11px Fredoka, Trebuchet MS, sans-serif';
+  ctx.fillStyle = C.label;
+  ctx.fillText(pack === 'mega' ? 'MEGA MYSTERY' : pack === 'sparkle' ? 'SPARKLE SERIES' : 'THE MONSTERS', mx, fy + 22);
 
   // Top face
+  ctx.beginPath();
+  ctx.moveTo(fx, fy);
+  ctx.lineTo(fx + depth, fy - depth * 0.6);
+  ctx.lineTo(fx + fw + depth, fy - depth * 0.6);
+  ctx.lineTo(fx + fw, fy);
+  ctx.closePath();
   if (lid) {
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(fx + depth, fy - depth * 0.6);
-    ctx.lineTo(fx + fw + depth, fy - depth * 0.6);
-    ctx.lineTo(fx + fw, fy);
-    ctx.closePath();
-    ctx.fillStyle = '#ffe3ec';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = OUTLINE;
-    ctx.stroke();
+    const tg = ctx.createLinearGradient(0, fy - depth * 0.6, 0, fy);
+    tg.addColorStop(0, '#ffffff');
+    tg.addColorStop(1, C.front[0]);
+    ctx.fillStyle = tg;
   } else {
-    // Open box: dark interior
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(fx + depth, fy - depth * 0.6);
-    ctx.lineTo(fx + fw + depth, fy - depth * 0.6);
-    ctx.lineTo(fx + fw, fy);
-    ctx.closePath();
-    ctx.fillStyle = '#5a2a40';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = OUTLINE;
-    ctx.stroke();
+    const ig = ctx.createLinearGradient(0, fy - depth * 0.6, 0, fy);
+    ig.addColorStop(0, '#2a1426');
+    ig.addColorStop(1, '#5a2a40');
+    ctx.fillStyle = ig;
   }
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
 }
 
-function makeBlindBox(scene) {
-  canvasTexture(scene, 'box_closed', 220, 250, (ctx) => drawBox(ctx, { lid: true }));
-  canvasTexture(scene, 'box_open', 220, 250, (ctx) => drawBox(ctx, { lid: false }));
+function star(ctx, x, y, r1, r2) {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const r = i % 2 ? r2 : r1;
+    const a = (i * Math.PI) / 4 - Math.PI / 2;
+    ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
 
-  // Loose lid for the "pop" animation
-  canvasTexture(scene, 'box_lid', 220, 70, (ctx) => {
-    ctx.translate(0, 10);
-    ctx.beginPath();
-    ctx.moveTo(20, 50);
-    ctx.lineTo(66, 22);
-    ctx.lineTo(216, 22);
-    ctx.lineTo(170, 50);
-    ctx.closePath();
-    ctx.fillStyle = '#ffe3ec';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = OUTLINE;
-    ctx.stroke();
+/** Per-pack box textures: box_closed_<pack>, box_open_<pack>, box_lid_<pack>, box_icon_<pack>. */
+function makeBlindBox(scene) {
+  for (const id of PACK_ORDER) {
+    const colors = PACKS[id].colors;
+    canvasTexture(scene, `box_closed_${id}`, 220, 250, (ctx) => drawBox(ctx, { lid: true, colors, pack: id }));
+    canvasTexture(scene, `box_open_${id}`, 220, 250, (ctx) => drawBox(ctx, { lid: false, colors, pack: id }));
+    // Loose lid for the "pop" animation
+    canvasTexture(scene, `box_lid_${id}`, 220, 70, (ctx) => {
+      ctx.translate(0, 10);
+      ctx.beginPath();
+      ctx.moveTo(20, 50);
+      ctx.lineTo(66, 22);
+      ctx.lineTo(216, 22);
+      ctx.lineTo(170, 50);
+      ctx.closePath();
+      const tg = ctx.createLinearGradient(0, 22, 0, 50);
+      tg.addColorStop(0, '#ffffff');
+      tg.addColorStop(1, colors.front[0]);
+      ctx.fillStyle = tg;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+    });
+    canvasTexture(scene, `box_icon_${id}`, 110, 125, (ctx) => {
+      ctx.scale(0.5, 0.5);
+      drawBox(ctx, { lid: true, colors, pack: id });
+    });
+  }
+  // Legacy keys used around the hub
+  canvasTexture(scene, 'box_icon', 110, 125, (ctx) => {
+    ctx.scale(0.5, 0.5);
+    drawBox(ctx, { lid: true });
   });
 
   // Foil tear strip
@@ -614,15 +768,9 @@ function makeBlindBox(scene) {
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.fillStyle = '#e0567f';
-    ctx.font = 'bold 11px Trebuchet MS, sans-serif';
+    ctx.font = '600 11px Fredoka, Trebuchet MS, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.fillText('TEAR HERE ▸▸▸', 52, 14);
-  });
-
-  // Small box icon for the menu
-  canvasTexture(scene, 'box_icon', 110, 125, (ctx) => {
-    ctx.scale(0.5, 0.5);
-    drawBox(ctx, { lid: true });
   });
 }
 
