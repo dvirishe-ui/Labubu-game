@@ -12,6 +12,8 @@ import { Services } from '../systems/Services.js';
 import { IdleRewardManager } from '../systems/IdleRewardManager.js';
 import { msUntilMidnight } from '../systems/QuestManager.js';
 import { chooseCost, pityStatus } from '../systems/GachaSystem.js';
+import { addXp, levelInfo, claimableCount as passClaimable } from '../systems/Progression.js';
+import { XP } from '../config/ProgressionConfig.js';
 import { showRewardedAd } from '../systems/AdService.js';
 import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
@@ -101,7 +103,9 @@ export class MainMenuScene extends Phaser.Scene {
         play: [cx, 320],
         best: [cx, 410],
         quests: [cx - 125, 490],
-        shop: [cx, 572],
+        shop: [cx + 125, 572],
+        pass: [cx - 125, 572],
+        level: [120, 96],
         collection: [cx, 640],
         box: { x: WIDTH - 400, y: 90, s: 1 },
         bank: { x: WIDTH - 400, y: 430, s: 1 }
@@ -120,6 +124,8 @@ export class MainMenuScene extends Phaser.Scene {
       showroom: [WIDTH - 110, feet - 150, 180],
       spin: [110, feet - 150],
       shop: [WIDTH - 110, feet - 72],
+      pass: [110, feet - 72],
+      level: [258, 100],
       logo: [WIDTH / 2, 190, 84],
       subtitle: [WIDTH / 2, 252],
       play: [WIDTH / 2, panelsY - 225],
@@ -214,8 +220,27 @@ export class MainMenuScene extends Phaser.Scene {
 
     // Shop: skins, boxes, deals and gems
     const [shx, shy] = L.shop;
-    this.shopBtn = makeButton(this, shx, shy, 'SHOP', () => this.go('Shop'), { w: L.portrait ? 180 : 230, h: 64, fontSize: 30, skin: 'purple', icon: 'gem', iconScale: 0.75 });
+    this.shopBtn = makeButton(this, shx, shy, 'SHOP', () => this.go('Shop'), { w: L.portrait ? 180 : 210, h: 64, fontSize: 30, skin: 'purple', icon: 'gem', iconScale: 0.75 });
     this.tweens.add({ targets: this.shopBtn, angle: { from: -2, to: 2 }, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
+
+    // Labubu Pass (season pass) with a "rewards ready" badge
+    const [px, py] = L.pass;
+    this.passBtn = makeButton(this, px, py, 'PASS', () => this.go('Pass'), { w: L.portrait ? 180 : 210, h: 64, fontSize: 30, skin: 'orange', icon: 'pw_score', iconScale: 0.6 });
+    this.passBadge = this.add.container(px + (L.portrait ? 82 : 96), py - 28);
+    this.passBadgeText = this.add.text(0, 0, '0', textStyle(18, '#ffffff')).setOrigin(0.5);
+    this.passBadge.add([this.add.circle(0, 0, 17, 0xe8324b).setStrokeStyle(3, 0xffffff), this.passBadgeText]);
+    this.tweens.add({ targets: this.passBadge, scale: 1.2, yoyo: true, repeat: -1, duration: 500 });
+
+    // Player level chip (tap = pass)
+    const [lx, ly] = L.level;
+    this.levelChip = this.add.container(lx, ly);
+    const chipBg = this.add.graphics();
+    chipBg.fillStyle(0x2d1b3d, 0.55).fillRoundedRect(-30, -20, 190, 40, 20);
+    this.levelBar = makeProgressBar(this, 22, -8, 126, 16, { fill: 0xb07cff });
+    this.levelNum = outlinedText(this, -14, 0, '1', 24);
+    this.levelChip.add([chipBg, this.levelBar.graphics, this.add.circle(-14, 0, 24, 0x8a4dff).setStrokeStyle(4, 0xffffff), this.levelNum]);
+    this.levelChip.setSize(190, 44).setInteractive({ useHandCursor: true });
+    this.levelChip.on('pointerup', () => this.go('Pass'));
   }
 
   buildBoxPanel() {
@@ -291,6 +316,12 @@ export class MainMenuScene extends Phaser.Scene {
     const claimable = Services.quests.claimableCount();
     this.questBadge.setVisible(claimable > 0);
     this.questBadgeText.setText(String(claimable));
+    const lv = levelInfo(d.progress.xp);
+    this.levelNum.setText(String(lv.level));
+    this.levelBar.set(lv.into / lv.need);
+    const passReady = passClaimable(Services.save);
+    this.passBadge.setVisible(passReady > 0);
+    this.passBadgeText.setText(String(passReady));
     const owned = d.inventory.length;
     this.collectionText.setText(`Collection ${owned}/${Object.keys(CATALOG).length} · Idle x${Services.idle.getTotalMultiplier().toFixed(2)}`);
   }
@@ -457,6 +488,7 @@ export class MainMenuScene extends Phaser.Scene {
             `Collect inbox (${inbox.length})`,
             () => {
               const rewards = qm.claimInbox();
+              addXp(Services.save, XP.PER_QUEST * rewards.length);
               Services.audio.play('cash');
               floatText(this, WIDTH / 2, HEIGHT / 2, `+${rewards.length} rewards`);
               rebuild();
@@ -495,6 +527,7 @@ export class MainMenuScene extends Phaser.Scene {
         if (done && !q.claimed) {
           const reward = Services.quests.claim(q.id);
           if (reward) {
+            addXp(Services.save, XP.PER_QUEST);
             Services.audio.play('cash');
             floatText(this, WIDTH / 2, HEIGHT / 2, `+${reward.amount} ${REWARD_LABELS[reward.type]}`);
           }

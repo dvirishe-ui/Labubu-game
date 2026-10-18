@@ -73,6 +73,11 @@ export function createDefaultSave(now = Date.now()) {
       mega: { sinceEpic: 0, sinceLegendary: 0, sinceSecret: 0 }
     },
     shop: { dealsDate: '', bought: [] },
+    // Consumable boosts (a starter one of each) and coin upgrade levels.
+    powerups: { headStart: 1, scoreBooster: 1 },
+    upgrades: { magnet: 0, star: 0, mushroom: 0, headStart: 0 },
+    progress: { xp: 0 },
+    pass: { season: '', xp: 0, gold: false, claimed: { free: [], gold: [] } },
     settings: { muted: false, music: true },
     wordHunt: { date: '', collected: [], completed: false },
     luckySpin: { lastSpinDate: '' },

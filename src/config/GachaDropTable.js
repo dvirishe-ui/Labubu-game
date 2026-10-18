@@ -38,6 +38,8 @@ export const SERIES_NAME = 'The Monsters · Forest Run Series';
  * real Pop Mart series, every box shows "Regular X% · Mystery Y%" up front.
  * `pity` guarantees a tier after N pulls of THIS pack without it.
  * `costs` lists the ways to pay (any one of them).
+ * `bonus` is the extra loot in every box: coins plus a chance of boosts,
+ * gems, tickets or keys (like the coins and goodies in a Brawl Stars box).
  */
 export const PACKS = {
   classic: {
@@ -50,7 +52,16 @@ export const PACKS = {
       { currency: 'blindBoxTickets', amount: 1 },
       { currency: 'popCoins', amount: 300 }
     ],
-    colors: { front: ['#ffd0de', '#ff8fb1'], side: ['#e05b86', '#b8406a'], label: '#3d2a52', accent: '#e0567f' }
+    colors: { front: ['#ffd0de', '#ff8fb1'], side: ['#e05b86', '#b8406a'], label: '#3d2a52', accent: '#e0567f' },
+    bonus: {
+      coins: [40, 120],
+      extras: [
+        { type: 'headStart', amount: 1, chance: 0.2 },
+        { type: 'scoreBooster', amount: 1, chance: 0.15 },
+        { type: 'gems', amount: [3, 10], chance: 0.2 },
+        { type: 'blindBoxTickets', amount: 1, chance: 0.08 }
+      ]
+    }
   },
   sparkle: {
     id: 'sparkle',
@@ -62,7 +73,16 @@ export const PACKS = {
       { currency: 'goldenKeys', amount: 1 },
       { currency: 'gems', amount: 60 }
     ],
-    colors: { front: ['#d6e9ff', '#6fb4ff'], side: ['#3f86e0', '#2a5fb0'], label: '#1d2a52', accent: '#2f6fd6' }
+    colors: { front: ['#d6e9ff', '#6fb4ff'], side: ['#3f86e0', '#2a5fb0'], label: '#1d2a52', accent: '#2f6fd6' },
+    bonus: {
+      coins: [100, 250],
+      extras: [
+        { type: 'headStart', amount: 1, chance: 0.35 },
+        { type: 'scoreBooster', amount: 1, chance: 0.3 },
+        { type: 'gems', amount: [8, 20], chance: 0.3 },
+        { type: 'blindBoxTickets', amount: 2, chance: 0.12 }
+      ]
+    }
   },
   mega: {
     id: 'mega',
@@ -71,7 +91,16 @@ export const PACKS = {
     odds: { epic: 60, legendary: 33, secret: 7 },
     pity: { legendary: 4, secret: 20 },
     costs: [{ currency: 'gems', amount: 150 }],
-    colors: { front: ['#fff1b8', '#ffc31f'], side: ['#e09b00', '#a86a00'], label: '#4a2a00', accent: '#d17a00' }
+    colors: { front: ['#fff1b8', '#ffc31f'], side: ['#e09b00', '#a86a00'], label: '#4a2a00', accent: '#d17a00' },
+    bonus: {
+      coins: [250, 500],
+      extras: [
+        { type: 'headStart', amount: 1, chance: 1 },
+        { type: 'scoreBooster', amount: 1, chance: 0.5 },
+        { type: 'gems', amount: [15, 40], chance: 0.4 },
+        { type: 'goldenKeys', amount: 1, chance: 0.25 }
+      ]
+    }
   }
 };
 export const PACK_ORDER = ['classic', 'sparkle', 'mega'];

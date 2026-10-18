@@ -10,16 +10,21 @@
  *   5. Stats card with "Equip Now" / "Store in Collection".
  *
  * The pull is rolled and saved in create() BEFORE any animation, so quitting
- * mid-reveal can never re-roll or lose the item.
+ * mid-reveal can never re-roll or lose the item. SKIP jumps straight to the
+ * result from any moment. Opening 5 at once ends in a card grid that flips
+ * one card at a time (Brawl Stars style), with all the bonus loot summed up.
  */
 import Phaser from 'phaser';
 import { WIDTH, HEIGHT, COLORS, EVENTS } from '../config/GameConfig.js';
 import { RARITY_TIERS, SERIES_NAME, PACKS, describePerks } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
-import { chooseCost, pullBlindBox } from '../systems/GachaSystem.js';
-import { bakeCharacterFrame, bakePlayerTextures, previewLoadoutFor } from '../art/CharacterRenderer.js';
-import { CurrencyBar, makeButton, makePanel, outlinedText, textStyle } from '../ui/UIKit.js';
-import { uiImage, buttonKey, shineKey } from '../ui/Skin.js';
+import { chooseCost, pullMany } from '../systems/GachaSystem.js';
+import { addXp } from '../systems/Progression.js';
+import { XP } from '../config/ProgressionConfig.js';
+import { rewardLabel, rewardIcon, sumRewards } from '../systems/Rewards.js';
+import { bakeCharacterFrame, bakePlayerTextures, previewLoadoutFor, ICON_RES } from '../art/CharacterRenderer.js';
+import { CurrencyBar, makeButton, makePanel, outlinedText, textStyle, displayStyle } from '../ui/UIKit.js';
+import { uiImage, buttonKey, shineKey, cardKey, INK } from '../ui/Skin.js';
 
 /** Legacy `source` values still used by quests: ticket -> Classic, key -> Sparkle. */
 const LEGACY_SOURCE = { ticket: ['classic', 'blindBoxTickets'], key: ['sparkle', 'goldenKeys'] };
@@ -41,6 +46,9 @@ export class UnboxingScene extends Phaser.Scene {
     this.packId = data?.packId || legacy?.[0] || 'classic';
     this.currency = data?.currency || legacy?.[1] || null;
     this.source = this.packId;
+    this.count = Math.max(1, data?.count || 1);
+    this.skipped = false;
+    this.eventsSent = false;
     this.phase = 'drop';
     this.tearProgress = 0;
     this.lastTearSfx = 0;
@@ -48,13 +56,17 @@ export class UnboxingScene extends Phaser.Scene {
 
   create() {
     // Roll first: the outcome is committed before the show starts.
-    this.result = pullBlindBox(Services.save, this.packId, this.currency);
-    if (!this.result.ok) {
+    const pull = pullMany(Services.save, this.packId, this.currency, this.count);
+    this.results = pull.results;
+    // The show uses the best pull (highest rarity) for the glow and the figure.
+    this.result = this.results.reduce((best, r) => (!best || RARITY_TIERS[r.rarity].rank > RARITY_TIERS[best.rarity].rank ? r : best), null) || { ok: false };
+    if (!pull.ok) {
       Services.bus.emit('ui:toast', { text: 'Not enough to open this box', sub: 'Get more in the Shop', color: COLORS.pink });
       this.scene.start('Shop', { tab: 'boxes' });
       return;
     }
     this.tier = RARITY_TIERS[this.result.rarity];
+    this.xp = addXp(Services.save, XP.PER_BOX * this.results.length);
 
     const equippedDoll = Services.save.data.equipped.baseDoll;
     bakeCharacterFrame(this, 'reveal_art', previewLoadoutFor(this.result.itemId, equippedDoll), 'wave', 2);
@@ -111,12 +123,16 @@ export class UnboxingScene extends Phaser.Scene {
       emitting: false
     });
 
-    this.skipBtn = makeButton(this, WIDTH - 110, 50, 'Skip', () => this.skip(), { w: 150, h: 52, fontSize: 22, color: 0x8d7aa3, colorDark: 0x5d4d72 }).setDepth(50);
+    // Big, always-visible SKIP button at the bottom of the screen.
+    this.skipBtn = makeButton(this, WIDTH / 2, HEIGHT - (this.portrait ? 90 : 56), 'SKIP  ▸▸', () => this.skip(), { w: 240, h: 66, fontSize: 30, skin: 'blue' }).setDepth(3000);
+    this.tweens.add({ targets: this.skipBtn, scale: 1.05, yoyo: true, repeat: -1, duration: 600, ease: 'Sine.easeInOut' });
+    if (this.count > 1) outlinedText(this, WIDTH / 2, this.portrait ? 210 : 60, `Opening ${this.count} boxes!`, 30, '#ffe066').setDepth(50);
   }
 
   /** Phase 1: bounce in. */
   async dropBox() {
     await this.tween({ targets: this.box, y: this.BY, duration: 900, ease: 'Bounce.easeOut' });
+    if (this.skipped) return;
     Services.audio.play('boxDrop');
     this.cameras.main.shake(120, 0.004);
     this.startTearPhase();
@@ -184,7 +200,9 @@ export class UnboxingScene extends Phaser.Scene {
     Services.audio.play('tear');
     this.tweens.add({ targets: [this.prompt, this.subPrompt], alpha: 0, duration: 200 });
     await this.wait(300);
+    if (this.skipped) return;
     await this.shakeSequence();
+    if (this.skipped) return;
     await this.reveal();
   }
 
@@ -198,6 +216,7 @@ export class UnboxingScene extends Phaser.Scene {
       const glowColor = level === 3 ? this.tier.color : 0xffffff;
       this.glow.setTint(glowColor);
       this.tweens.add({ targets: this.glow, alpha: 0.25 + level * 0.18, scale: 1.4 + level * 0.35, duration: 200 });
+      if (this.skipped) return;
       await this.tween({
         targets: this.box,
         angle: { from: -4 * level, to: 4 * level },
@@ -206,6 +225,7 @@ export class UnboxingScene extends Phaser.Scene {
         repeat: 2,
         duration: 55
       });
+      if (this.skipped) return;
       this.box.setAngle(0).setX(this.BX);
       await this.wait(level === 3 ? 450 : 380);
     }
@@ -213,8 +233,8 @@ export class UnboxingScene extends Phaser.Scene {
 
   /** Phase 4: lid pops, burst in the tier colour, figure rises out of the box. */
   async reveal() {
+    if (this.skipped) return;
     this.phase = 'reveal';
-    this.skipBtn.setVisible(false);
     this.tweens.add({ targets: this.shadow, alpha: 0, duration: 400 });
     const tier = this.tier;
     const rarity = this.result.rarity;
@@ -275,6 +295,7 @@ export class UnboxingScene extends Phaser.Scene {
     this.tweens.add({ targets: this.box, y: this.BY + 260, alpha: 0, duration: 700, delay: 250, ease: 'Cubic.easeIn' });
     const figY = this.portrait ? this.BY - 30 : 360;
     await this.tween({ targets: this.figure, y: figY, scale: 1.25, alpha: 1, duration: 750, ease: 'Back.easeOut' });
+    if (this.skipped) return;
     this.tweens.add({ targets: this.figure, y: figY - 15, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     if (tier.rank >= RARITY_TIERS.legendary.rank) {
@@ -286,9 +307,23 @@ export class UnboxingScene extends Phaser.Scene {
       this.cameras.main.shake(400, 0.01);
     }
 
-    Services.bus.emit(EVENTS.BOX_OPENED, { itemId: this.result.itemId, rarity, isNew: this.result.isNew, source: this.source });
+    this.sendEvents();
     await this.wait(tier.rank >= 3 ? 1200 : 500);
-    this.showCard();
+    if (this.skipped) return;
+    this.showResult();
+  }
+
+  /** Quest events for every box opened (once). */
+  sendEvents() {
+    if (this.eventsSent) return;
+    this.eventsSent = true;
+    for (const r of this.results) Services.bus.emit(EVENTS.BOX_OPENED, { itemId: r.itemId, rarity: r.rarity, isNew: r.isNew, source: this.source });
+  }
+
+  showResult() {
+    this.skipBtn.setVisible(false);
+    if (this.results.length > 1) this.showGrid();
+    else this.showCard();
   }
 
   /** Phase 5: stats card and the two decision buttons. */
@@ -332,12 +367,16 @@ export class UnboxingScene extends Phaser.Scene {
     const perkLines = describePerks(item.perks);
     card.add(this.add.text(x0 + 40, perkY, perkLines.map((l) => `• ${l}`).join('\n'), textStyle(19, '#2f9a7a', { lineSpacing: 6, wordWrap: { width: 440 } })));
 
+    const bonus = sumRewards(this.result.bonus || []);
+    if (bonus.length) {
+      card.add(this.add.text(x0 + 260, 466, `Bonus: ${bonus.map((b) => rewardLabel(b)).join(' · ')}`, textStyle(17, '#2f6fd6', { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
+    }
     const extras = [refund.coins && `+${refund.coins} coins`, refund.gems && `+${refund.gems} gems`, refund.keys && `+${refund.keys} key${refund.keys > 1 ? 's' : ''}`].filter(Boolean);
     const status = isNew ? 'NEW! Added to your collection' : `Duplicate · converted to ${extras.join(' & ')}`;
-    card.add(this.add.text(x0 + 260, 494, status, textStyle(19, isNew ? '#e0567f' : '#c98a00', { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
+    card.add(this.add.text(x0 + 260, 502, status, textStyle(19, isNew ? '#e0567f' : '#c98a00', { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
     if (pityTriggered) {
       const name = { epic: 'Epic+', legendary: 'Legendary+', secret: 'Mystery' }[pityTriggered];
-      card.add(this.add.text(x0 + 260, 520, `Pity guarantee: ${name}`, textStyle(16, '#8a7a9a')).setOrigin(0.5));
+      card.add(this.add.text(x0 + 260, 526, `Pity guarantee: ${name}`, textStyle(16, '#8a7a9a')).setOrigin(0.5));
     }
 
     // Shine sweep across the card for Epic and better
@@ -387,19 +426,128 @@ export class UnboxingScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(key));
   }
 
-  /** Fast-forward: jumps straight to the reveal (the result is already saved). */
+  /**
+   * SKIP: works at any moment before the result. Everything in flight is
+   * stopped and the scene jumps to the final card / grid (the pull is
+   * already saved, so nothing can be lost).
+   */
   skip() {
-    if (this.phase === 'drop' || this.phase === 'tear') {
-      this.tweens.killTweensOf(this.box);
-      this.box.setPosition(this.BX, this.BY);
-      this.hint?.destroy();
-      this.tweens.killTweensOf([this.prompt, this.subPrompt]);
-      this.prompt.setAlpha(0);
-      this.subPrompt.setAlpha(0);
-      this.foil.setVisible(false);
-      this.phase = 'reveal';
-      this.time.removeAllEvents();
-      this.reveal();
-    }
+    if (this.skipped || this.phase === 'card') return;
+    this.skipped = true;
+    this.phase = 'reveal';
+    this.tweens.killAll();
+    this.time.removeAllEvents();
+    this.cameras.main.resetFX();
+    this.hint?.destroy();
+    this.prompt.setAlpha(0);
+    this.subPrompt.setAlpha(0);
+    this.box.setVisible(false);
+    this.shadow.setAlpha(0);
+    const tier = this.tier;
+    this.rays.setTint(tier.color).setAlpha(tier.key === 'common' ? 0.35 : 0.8).setScale(1.6);
+    this.tweens.add({ targets: this.rays, angle: 360, duration: 14000, repeat: -1 });
+    this.glow.setTint(tier.color).setAlpha(0.9).setScale(3.2);
+    const figY = this.portrait ? this.BY - 30 : 360;
+    if (!this.figure) this.figure = this.add.image(this.BX, figY, 'reveal_art');
+    this.figure.setPosition(this.BX, figY).setScale(1.25).setAlpha(1);
+    Services.audio.play('reveal', this.result.rarity);
+    this.sendEvents();
+    this.showResult();
+  }
+
+  /** Multi-open: a grid of cards that flip over one by one. */
+  showGrid() {
+    this.phase = 'card';
+    const n = this.results.length;
+    const topY = this.portrait ? Math.round(HEIGHT * 0.17) : 150;
+    // The cards are the stars now: keep the light show, hide the big figure.
+    this.tweens.killTweensOf([this.figure, this.rays, this.glow, this.spot]);
+    this.figure?.setVisible(false);
+    this.banner?.setVisible(false);
+    this.tweens.add({ targets: [this.rays, this.glow, this.spot], y: topY, duration: 400, ease: 'Cubic.easeInOut' });
+
+    const CW = 150;
+    const CH = 196;
+    const cols = this.portrait ? 3 : n;
+    const gap = 16;
+    const gridTop = this.portrait ? Math.round(HEIGHT * 0.3) : 250;
+    const positions = this.results.map((_, i) => {
+      const row = Math.floor(i / cols);
+      const inRow = Math.min(cols, n - row * cols);
+      const left = WIDTH / 2 - (inRow * (CW + gap) - gap) / 2;
+      return { x: left + (i % cols) * (CW + gap) + CW / 2, y: gridTop + row * (CH + 30) + CH / 2 };
+    });
+
+    this.results.forEach((r, i) => {
+      const { x, y } = positions[i];
+      const card = this.add.container(x, y).setDepth(100);
+      const back = uiImage(this, -CW / 2 - 6, -CH / 2 - 4, cardKey(this, CW, CH, 'common', true));
+      const q = outlinedText(this, 0, -6, '?', 64, '#ffffff');
+      card.add([back, q]);
+      card.setScale(0);
+      this.tweens.add({ targets: card, scale: 1, duration: 260, delay: i * 70, ease: 'Back.easeOut' });
+
+      const flip = () => {
+        this.tweens.add({
+          targets: card,
+          scaleX: 0,
+          duration: 130,
+          onComplete: () => {
+            card.removeAll(true);
+            const tier = RARITY_TIERS[r.rarity];
+            card.add(uiImage(this, -CW / 2 - 6, -CH / 2 - 4, cardKey(this, CW, CH, r.rarity)));
+            card.add(this.add.image(0, -18, `icon_${r.itemId}`).setScale((0.92 * 0.75) / ICON_RES));
+            card.add(this.add.text(0, CH / 2 - 15, r.item.name, displayStyle(14, '#ffffff', { stroke: INK, strokeThickness: 3 })).setOrigin(0.5));
+            card.add(outlinedText(this, 0, -CH / 2 + 16, tier.label.toUpperCase(), 16));
+            const tag = r.isNew ? 'NEW!' : `+${r.refund.coins}`;
+            card.add(outlinedText(this, CW / 2 - 18, CH / 2 - 44, tag, 18, r.isNew ? '#ff8fd0' : '#ffe066').setAngle(-10));
+            this.tweens.add({ targets: card, scaleX: 1, duration: 150, ease: 'Back.easeOut' });
+            Services.audio.play(tier.rank >= 2 ? 'reveal' : 'coin', r.rarity);
+            if (tier.rank >= 2) {
+              const c = Phaser.Display.Color.IntegerToRGB(tier.glow);
+              this.cameras.main.flash(120, c.r, c.g, c.b);
+              const burst = this.add.particles(0, 0, 'p_spark', { lifespan: 700, speed: { min: 100, max: 320 }, scale: { start: 1, end: 0 }, tint: [tier.color, 0xffffff], blendMode: 'ADD', emitting: false }).setDepth(150);
+              burst.explode(30, x, y);
+            }
+          }
+        });
+      };
+      this.time.delayedCall(500 + i * 380, flip);
+    });
+
+    // Bonus loot from every box, summed up.
+    const bonus = sumRewards(this.results.flatMap((r) => [...(r.bonus || []), ...(r.refund.gems ? [{ type: 'gems', amount: r.refund.gems }] : []), ...(r.refund.keys ? [{ type: 'goldenKeys', amount: r.refund.keys }] : [])]));
+    const rows = Math.ceil(n / cols);
+    const by = gridTop + rows * (CH + 30) + 10;
+    const done = 500 + n * 380 + 200;
+    this.time.delayedCall(done, () => {
+      const strip = this.add.container(WIDTH / 2, by).setDepth(120);
+      strip.add(outlinedText(this, 0, 0, 'BONUS LOOT', 24, '#8fd3ff'));
+      const itemW = 112;
+      bonus.forEach((b, i) => {
+        const x = (i - (bonus.length - 1) / 2) * itemW;
+        const icon = this.add.image(x, 44, rewardIcon(b)).setScale(0.8);
+        strip.add([icon, outlinedText(this, x, 80, rewardLabel(b).replace(/ (Coins|Gems|Tickets?|Golden Keys?|Head Starts?|Score Boosters?)$/, ''), 20, '#ffffff')]);
+      });
+      strip.setScale(0);
+      this.tweens.add({ targets: strip, scale: Math.min(1, (WIDTH - 30) / Math.max(1, bonus.length * itemW)), duration: 300, ease: 'Back.easeOut' });
+      Services.audio.play('cash');
+
+      const btnY = Math.min(HEIGHT - 60, by + 150);
+      const again = chooseCost(Services.save, this.packId, this.currency, n);
+      makeButton(this, WIDTH / 2 - (again ? 130 : 0), btnY, 'Collection', () => this.leave('Showroom'), { w: 230, h: 62, fontSize: 24, skin: 'green' }).setDepth(130);
+      if (again) {
+        const icon = { blindBoxTickets: 'ticket', goldenKeys: 'key', gems: 'gem', popCoins: 'coin' }[again.currency];
+        makeButton(this, WIDTH / 2 + 130, btnY, `${n}x  ${again.amount * n}`, () => this.scene.restart({ packId: this.packId, currency: again.currency, count: n }), {
+          w: 230,
+          h: 62,
+          fontSize: 24,
+          skin: 'pink',
+          icon,
+          iconScale: 0.55
+        }).setDepth(130);
+      }
+      makeButton(this, WIDTH / 2, btnY + 76, 'Menu', () => this.leave('MainMenu'), { w: 180, h: 52, fontSize: 22, skin: 'gray' }).setDepth(130);
+    });
   }
 }

@@ -58,12 +58,14 @@ export class Player {
     this.runPhase = 0;
     this.squash = { x: 1, y: 1 };
     this.spin = 0;
+    this.flying = false; // Head Start rocket ride
 
     this.shadow = scene.add.image(0, 0, 'fx_shadow').setDepth(5000);
     this.afterimages = Array.from({ length: AFTERIMAGES }, () => scene.add.image(0, 0, 'player_back', 'run0').setOrigin(0.5, 1).setVisible(false).setDepth(5001));
     this.nextAfterimageAt = 0;
     this.afterimageIndex = 0;
     this.sprite = scene.add.image(0, 0, 'player_back', 'run0').setOrigin(0.5, 1).setDepth(5002);
+    this.rocket = scene.add.image(0, 0, 'hs_rocket').setOrigin(0.5, 0.35).setVisible(false);
     this.shieldFx = scene.add.image(0, 0, 'fx_shield').setDepth(5003).setVisible(this.shieldCharges > 0);
     scene.tweens.add({ targets: this.shieldFx, alpha: { from: 0.6, to: 1 }, yoyo: true, repeat: -1, duration: 600 });
   }
@@ -73,7 +75,7 @@ export class Player {
   }
 
   get isGrounded() {
-    return this.y <= 0.0001 && this.vy <= 0;
+    return !this.flying && this.y <= 0.0001 && this.vy <= 0;
   }
 
   get isCrashed() {
@@ -129,7 +131,7 @@ export class Player {
 
   /** Tap / swipe up. Ground jump, then air jumps (double; triple with Beaver Tail). */
   jump() {
-    if (this.isCrashed) return false;
+    if (this.isCrashed || this.flying) return false;
     if (this.isGrounded || this.state === PlayerState.DUCK) {
       this.vy = RUNNER.JUMP_VELOCITY * Math.sqrt(this.perks.jumpMultiplier);
       this.y = 0.001;
@@ -156,9 +158,37 @@ export class Player {
     return false;
   }
 
+  /** Spring pad: launches the runner high (air jumps are restored). */
+  bounce(velocity) {
+    if (this.isCrashed || this.flying) return;
+    this.vy = velocity;
+    this.y = Math.max(this.y, 0.001);
+    this.jumpsUsed = 1;
+    this.state = PlayerState.JUMP;
+    this.punch(0.7, 1.35, 140);
+    this.scene.events.emit('player-jump', { double: false, count: 1, spring: true });
+  }
+
+  /** Head Start: ride a rocket high above the track. */
+  startFlying() {
+    this.flying = true;
+    this.state = PlayerState.JUMP;
+    this.vy = 0;
+    this.rocket.setVisible(true);
+  }
+
+  stopFlying() {
+    this.flying = false;
+    this.state = PlayerState.FALL;
+    this.vy = 2;
+    this.jumpsUsed = 1;
+    this.invulnerableUntil = this.now + 1800;
+    this.rocket.setVisible(false);
+  }
+
   /** Swipe down / hold down: roll under gates. In the air it slams down first. */
   duck(held = false) {
-    if (this.isCrashed) return;
+    if (this.isCrashed || this.flying) return;
     this.duckHeld = held;
     this.duckUntil = this.now + RUNNER.ROLL_MS;
     if (this.isGrounded) {
@@ -243,8 +273,17 @@ export class Player {
       return;
     }
 
+    if (this.flying) {
+      // Glide up to rocket height and bob there.
+      const targetY = (this.scene.flyHeight ?? 3.2) + Math.sin(now * 0.004) * 0.15;
+      this.y += (targetY - this.y) * Math.min(1, dt * 4);
+      this.state = PlayerState.JUMP;
+      return;
+    }
+
     if (!this.isGrounded) {
-      let g = RUNNER.GRAVITY * this.perks.gravityMultiplier;
+      // Zones (Low Gravity) scale gravity for everyone.
+      let g = RUNNER.GRAVITY * this.perks.gravityMultiplier * (this.scene.gravityScale ?? 1);
       if (this.perks.floatyFall && this.jumpHeld && this.vy < 0) g *= RUNNER.FLOATY_GRAVITY_FACTOR;
       this.vy -= g * dt;
       this.y += this.vy * dt;
@@ -332,9 +371,14 @@ export class Player {
     this.shieldFx.setDepth(d + 0.4);
     this.afterimages.forEach((a) => a.setDepth(d + 0.2));
     this.shieldFx.setPosition(feet.x, feet.y - DRAW_HEIGHT_M * feet.s * 0.45).setScale((2.1 * feet.s) / 150);
+    if (this.flying) {
+      this.rocket.setPosition(feet.x, feet.y - 0.15 * feet.s).setScale((1.5 * feet.s) / 160).setDepth(d + 0.25).setAngle(Math.sin(now * 0.01) * 4);
+      this.sprite.setFrame('fall');
+    }
   }
 
   destroy() {
+    this.rocket.destroy();
     this.sprite.destroy();
     this.shadow.destroy();
     this.shieldFx.destroy();

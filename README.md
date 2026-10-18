@@ -108,6 +108,38 @@ The store is laid out like Brawl Stars:
 - **Skins:** every Common, Rare, Epic and Legendary skin, sold for gems (Common and Rare also for coins). Mystery skins are box-exclusive.
 - **Gems:** a free daily video reward, plus gem packs. Real-money packs only work in the store builds. On the web the game says to ask a grown-up and charges nothing. `PurchaseService.js` documents where to plug in RevenueCat or another billing plugin. Put it behind a parental gate to meet the store family policies.
 
+### Difficulty that grows (Subway Surfers-style)
+
+Runs start gentle (11 m/s) and speed up steadily toward 34 m/s. The track also gets trickier stage by stage (`ProgressionConfig.STAGES`):
+
+| Stage | From | What's new |
+| --- | --- | --- |
+| 1 Warm-up Meadow | 0 m | Single hazards, wide gaps |
+| 2 Tricky Trail | 350 m | **Crate towers you must double-jump**, pairs, full rows |
+| 3 Wild Woods | 900 m | **Charging carts** that race at you, jump-then-roll combos |
+| 4 Thunder Canyon | 1,800 m | Tighter gaps, more combos and carts |
+| 5 Monster Mountain | 3,000 m | Rows of crate towers in every lane |
+| 6 Rainbow Inferno | 4,500 m | Everything, tightest gaps |
+
+### Special zones
+
+A rainbow gate announces each zone. The first zone comes at 450 m, then one roughly every 400–550 m, and each lasts 240 m:
+
+- **Low Gravity:** jumps float sky-high over crate towers, with coins up in the stars.
+- **Turbo Zone:** extra speed and double score.
+- **Gold Rush:** coins everywhere, worth double.
+- **Bounce Zone:** springs launch you over walls of crates.
+
+### Boosts, upgrades, levels and the Labubu Pass
+
+- **Head Start:** ride a rocket to 1,000 m (more with upgrades).
+- **Score Booster:** +2 to the score multiplier for the whole run.
+- Both are offered for the first seconds of a run. You get them from boxes, the pass and level-ups, or buy them in the Shop's **Boosts** tab.
+- **Upgrades:** spend coins to make Magnet, Star and Dash last longer, and to make Head Start go further (5 levels each).
+- **XP and player level:** XP comes from runs, boxes and quests. Every level-up pays a reward.
+- **Labubu Pass:** a monthly season pass with 30 tiers. Every tier has a free reward and a Gold reward. The Gold track unlocks for 250 gems and includes exclusive skins.
+- **Blind boxes:** every box also holds bonus loot (coins, plus a chance of Head Starts, Score Boosters, gems, tickets or keys). You can open **5 at once** for a card-flip reveal, and **SKIP** works at any moment.
+
 ### Keeping kids coming back
 
 - **Praise pop-ups:** NICE! → GREAT! → AWESOME! → … → LEGENDARY!, with confetti, for dodge streaks and coin combos.
@@ -135,6 +167,7 @@ labubu-game/
 └── src/
     ├── main.js                     # services + lifecycle hooks + Phaser config
     ├── config/
+    │   ├── ProgressionConfig.js    # stages, zones, boosts, upgrades, levels, season pass
     │   ├── GameConfig.js           # dimensions, physics, economy, idle & sync tuning, event names
     │   ├── GachaDropTable.js       # rarity weights, pity thresholds, item catalog + perks
     │   └── QuestCatalog.js         # daily / weekly mission templates
@@ -145,7 +178,8 @@ labubu-game/
     │   ├── RunnerScene.js          # core loop
     │   ├── UnboxingScene.js        # bounce -> foil swipe -> 3 shakes -> tiered reveal -> stats card
     │   ├── ShowroomScene.js        # wardrobe, live doll preview, stats inspector
-    │   ├── ShopScene.js            # Deals / Boxes / Skins / Gems store
+    │   ├── ShopScene.js            # Deals / Boxes / Skins / Boosts / Gems store
+    │   ├── PassScene.js            # Labubu Pass: free + Gold reward tracks
     │   └── UIOverlayScene.js       # always-on-top toasts (quests, connectivity)
     ├── systems/
     │   ├── SaveManager.js          # localStorage CRUD, schema migration, dirty flag
@@ -157,6 +191,10 @@ labubu-game/
     │   ├── AudioController.js      # Web Audio synthesized SFX + chiptune loops
     │   ├── GachaSystem.js          # per-box rolls, pity, duplicates, skin purchases
     │   ├── ShopSystem.js           # daily rotating deals
+    │   ├── RunDirector.js          # speed curve, difficulty stages, zone schedule
+    │   ├── Progression.js          # XP, levels, season pass
+    │   ├── Boosts.js               # Head Start / Score Booster + upgrades
+    │   ├── Rewards.js              # grants any reward (currencies, boosts, items)
     │   ├── PurchaseService.js      # real-money gem packs (native billing hook)
     │   ├── PerkCalculator.js       # loadout -> gameplay modifiers
     │   ├── RunnerItems.js          # item-box roulette table

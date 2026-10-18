@@ -6,6 +6,7 @@
  */
 import { WIDTH, HEIGHT } from '../config/GameConfig.js';
 import { PACKS, PACK_ORDER } from '../config/GachaDropTable.js';
+import { ZONES } from '../config/ProgressionConfig.js';
 
 /** Creates a canvas texture, runs `draw(ctx, w, h)` and uploads it. */
 export function canvasTexture(scene, key, w, h, draw) {
@@ -1627,6 +1628,326 @@ function makeRunner3D(scene) {
   }
 }
 
+// ---------------------------------------------------------------------------- stages, zones & boosts
+
+function starPath(ctx, x, y, r1, r2, points = 5) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 ? r2 : r1;
+    const a = (i * Math.PI) / points - Math.PI / 2;
+    ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  ctx.closePath();
+}
+
+function crate(ctx, x, y, w, h, top, bottom) {
+  rr(ctx, x, y, w, h, 10);
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  // planks + cross brace
+  ctx.strokeStyle = 'rgba(60,20,30,0.35)';
+  ctx.lineWidth = 3;
+  rr(ctx, x + 10, y + 10, w - 20, h - 20, 6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + 14, y + 14);
+  ctx.lineTo(x + w - 14, y + h - 14);
+  ctx.moveTo(x + w - 14, y + 14);
+  ctx.lineTo(x + 14, y + h - 14);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  rr(ctx, x + 6, y + 5, w - 12, 8, 4);
+  ctx.fill();
+}
+
+function makeAdventure(scene) {
+  // Tall candy-crate tower: too high for one jump - DOUBLE JUMP over it!
+  canvasTexture(scene, 'obs_crates', 240, 340, (ctx) => {
+    crate(ctx, 8, 214, 224, 120, '#ff9ec7', '#e0567f');
+    crate(ctx, 22, 104, 196, 112, '#8fd3ff', '#3f86e0');
+    crate(ctx, 40, 22, 160, 86, '#ffe36e', '#f0a400');
+    // "x2" double-jump sign
+    ctx.save();
+    ctx.translate(120, 64);
+    rr(ctx, -46, -26, 92, 52, 16);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.fillStyle = '#e0337f';
+    ctx.font = '34px "Lilita One", Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⇈ x2', 0, 3);
+    ctx.restore();
+  });
+
+  // Charging candy cart (seen from the front, it races toward you).
+  canvasTexture(scene, 'obs_cart', 260, 210, (ctx) => {
+    // wheels
+    for (const x of [46, 214]) {
+      ctx.beginPath();
+      ctx.arc(x, 176, 28, 0, Math.PI * 2);
+      ctx.fillStyle = '#3d2a52';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, 176, 11, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd23f';
+      ctx.fill();
+    }
+    // body
+    ctx.beginPath();
+    ctx.moveTo(10, 40);
+    ctx.lineTo(250, 40);
+    ctx.lineTo(232, 170);
+    ctx.lineTo(28, 170);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, 40, 0, 170);
+    g.addColorStop(0, '#ff6f7f');
+    g.addColorStop(1, '#c22f4f');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    // candy stripes
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 12;
+    for (let x = -100; x < 300; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, 170);
+      ctx.lineTo(x + 130, 40);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // rim + headlights + angry face
+    rr(ctx, 4, 28, 252, 22, 10);
+    ctx.fillStyle = '#ffd23f';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    for (const x of [70, 190]) {
+      const hl = ctx.createRadialGradient(x, 110, 2, x, 110, 26);
+      hl.addColorStop(0, '#ffffff');
+      hl.addColorStop(0.5, '#fff6b0');
+      hl.addColorStop(1, '#ffc93c');
+      ctx.beginPath();
+      ctx.arc(x, 110, 22, 0, Math.PI * 2);
+      ctx.fillStyle = hl;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(52, 76);
+    ctx.lineTo(92, 90);
+    ctx.moveTo(208, 76);
+    ctx.lineTo(168, 90);
+    ctx.stroke();
+    rr(ctx, 100, 128, 60, 22, 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  // Bounce spring
+  canvasTexture(scene, 'spring', 140, 120, (ctx) => {
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = '#c0c8d6';
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.ellipse(70, 100 - i * 18, 44, 10, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.ellipse(70, 100 - i * 18, 49, 14, 0, 0, Math.PI);
+      ctx.stroke();
+    }
+    rr(ctx, 10, 12, 120, 30, 14);
+    const g = ctx.createLinearGradient(0, 12, 0, 42);
+    g.addColorStop(0, '#ff9ec7');
+    g.addColorStop(1, '#ff4fa3');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '22px "Lilita One", Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BOING', 70, 28);
+  });
+
+  // Zone gates: a rainbow arch with the zone's name across the road.
+  for (const z of Object.values(ZONES)) {
+    canvasTexture(scene, `zone_${z.key}`, 640, 380, (ctx) => {
+      const c = `#${z.arch.toString(16).padStart(6, '0')}`;
+      // pillars
+      for (const x of [40, 600]) {
+        rr(ctx, x - 26, 120, 52, 258, 14);
+        const pg = ctx.createLinearGradient(x - 26, 0, x + 26, 0);
+        pg.addColorStop(0, '#ffffff');
+        pg.addColorStop(1, c);
+        ctx.fillStyle = pg;
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = OUTLINE;
+        ctx.stroke();
+      }
+      // rainbow arch
+      const bands = ['#ff5a6e', '#ff9f43', '#ffd23f', '#6ee7a8', '#59b8ff', '#b07cff'];
+      bands.forEach((b, i) => {
+        ctx.beginPath();
+        ctx.arc(320, 300, 290 - i * 12, Math.PI, 0);
+        ctx.lineWidth = 13;
+        ctx.strokeStyle = b;
+        ctx.stroke();
+      });
+      // banner
+      rr(ctx, 90, 54, 460, 96, 30);
+      const bg = ctx.createLinearGradient(0, 54, 0, 150);
+      bg.addColorStop(0, '#ffffff');
+      bg.addColorStop(0.15, c);
+      bg.addColorStop(1, c);
+      ctx.fillStyle = bg;
+      ctx.fill();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.font = '58px "Lilita One", Trebuchet MS, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = OUTLINE;
+      ctx.strokeText(z.name, 320, 106);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(z.name, 320, 104);
+      ctx.fillStyle = '#ffe066';
+      for (const [x, y] of [[70, 40], [570, 40], [320, 20]]) {
+        starPath(ctx, x, y, 18, 8);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    });
+  }
+
+  // Head Start icon: a little red rocket.
+  const rocket = (ctx, scale = 1) => {
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.translate(32, 32);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#ffb347';
+    ctx.beginPath();
+    ctx.moveTo(-7, 16);
+    ctx.lineTo(0, 30);
+    ctx.lineTo(7, 16);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.quadraticCurveTo(14, -12, 11, 16);
+    ctx.lineTo(-11, 16);
+    ctx.quadraticCurveTo(-14, -12, 0, -26);
+    ctx.fillStyle = '#ff4f6a';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -6, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#8fd3ff';
+    ctx.fill();
+    ctx.stroke();
+    for (const sx of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(sx * 10, 4);
+      ctx.lineTo(sx * 18, 18);
+      ctx.lineTo(sx * 10, 16);
+      ctx.closePath();
+      ctx.fillStyle = '#ffd23f';
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+  canvasTexture(scene, 'pw_headstart', 64, 64, (ctx) => rocket(ctx));
+
+  // Score Booster icon: golden star with "+2".
+  canvasTexture(scene, 'pw_score', 64, 64, (ctx) => {
+    starPath(ctx, 32, 33, 30, 15);
+    const g = ctx.createRadialGradient(26, 24, 3, 32, 33, 30);
+    g.addColorStop(0, '#fff6c2');
+    g.addColorStop(1, '#ffb400');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.font = '22px "Lilita One", Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 5;
+    ctx.strokeText('+2', 32, 36);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('+2', 32, 36);
+  });
+
+  // Rocket the runner rides during a Head Start (seen from behind).
+  canvasTexture(scene, 'hs_rocket', 160, 150, (ctx) => {
+    for (const [x, y, w] of [[34, 80, 26], [126, 80, 26]]) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 30);
+      ctx.lineTo(x + (x < 80 ? -w : w), y + 20);
+      ctx.lineTo(x, y + 14);
+      ctx.closePath();
+      ctx.fillStyle = '#ffd23f';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(80, 70, 46, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(64, 54, 6, 80, 70, 46);
+    g.addColorStop(0, '#ff9aa8');
+    g.addColorStop(1, '#d6233f');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(80, 70, 26, 0, Math.PI * 2);
+    ctx.fillStyle = '#5a5f6e';
+    ctx.fill();
+    ctx.stroke();
+    const f = ctx.createRadialGradient(80, 74, 2, 80, 74, 22);
+    f.addColorStop(0, '#ffffff');
+    f.addColorStop(0.4, '#fff07a');
+    f.addColorStop(1, '#ff7a1a');
+    ctx.beginPath();
+    ctx.arc(80, 74, 20, 0, Math.PI * 2);
+    ctx.fillStyle = f;
+    ctx.fill();
+  });
+}
+
 /** Generates every non-character texture. Called once from BootScene. */
 export function generateAllTextures(scene) {
   makePickups(scene);
@@ -1636,4 +1957,5 @@ export function generateAllTextures(scene) {
   makeBackgrounds(scene);
   makeKartExtras(scene);
   makeRunner3D(scene);
+  makeAdventure(scene);
 }

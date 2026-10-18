@@ -376,8 +376,8 @@ export class CurrencyBar {
       ['blindBoxTickets', 'ticket', 0.58],
       ['goldenKeys', 'key', 0.62]
     ];
-    const pillW = compact ? 134 : 160;
-    const gap = compact ? 10 : 18;
+    const pillW = compact ? 156 : 160;
+    const gap = compact ? 8 : 18;
     defs.forEach(([key, tex, scale], i) => {
       const cx = i * (pillW + gap);
       const pill = uiImage(scene, cx + 14, 2, pillKey(scene, pillW - 14, 40));

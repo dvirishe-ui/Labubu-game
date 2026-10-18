@@ -9,6 +9,9 @@
  *  - 'jump' : low hazard (stump, rock, bramble, log) - jump over or change lane
  *  - 'duck' : gate with a bar overhead - roll under or change lane
  *  - 'wall' : giant toadstool house - change lane
+ *  - 'high' : candy-crate tower, too tall for one jump - DOUBLE JUMP over it
+ *  - 'deco' : zone gate arch (no collision)
+ * Carts (`speed` > 0) charge toward the runner once they get close.
  */
 import { RUNNER } from '../config/GameConfig.js';
 import { depthFor, placeBillboard } from './World3D.js';
@@ -24,7 +27,11 @@ export const OBSTACLE_TYPES = {
   bramble: { texture: 'obs_bramble', kind: 'jump', w: 1.8, h: 0.9, d: 1.0, drawH: 1.0, minMeters: 150, weight: 2 },
   log: { texture: 'obs_log', kind: 'jump', w: 1.9, h: 0.75, d: 1.0, drawH: 0.85, minMeters: 60, weight: 2 },
   gate: { texture: 'obs_gate', kind: 'duck', w: 2.0, clear: 1.05, top: 1.75, d: 0.6, drawH: 2.05, minMeters: 80, weight: 3 },
-  tower: { texture: 'obs_tower', kind: 'wall', w: 1.9, h: 3.0, d: 1.6, drawH: 3.0, minMeters: 40, weight: 3 }
+  tower: { texture: 'obs_tower', kind: 'wall', w: 1.9, h: 3.0, d: 1.6, drawH: 3.0, minMeters: 40, weight: 3 },
+  // Placed by stage patterns only (weight 0 = never picked at random).
+  crates: { texture: 'obs_crates', kind: 'high', w: 1.8, h: 2.3, d: 1.0, drawH: 2.7, minMeters: 0, weight: 0 },
+  cart: { texture: 'obs_cart', kind: 'jump', w: 1.7, h: 1.0, d: 1.4, drawH: 1.3, minMeters: 0, weight: 0, speed: 10, chargeAt: 75 },
+  arch: { texture: 'zone_moon', kind: 'deco', w: 9, h: 0, d: 0.5, drawH: 5.2, minMeters: 0, weight: 0 }
 };
 
 export class ObstaclePool {
@@ -36,7 +43,7 @@ export class ObstaclePool {
 
   /** Weighted random type unlocked at `meters`, optionally restricted to kinds. */
   randomType(meters, kinds = null) {
-    const types = Object.entries(OBSTACLE_TYPES).filter(([, t]) => meters >= t.minMeters && (!kinds || kinds.includes(t.kind)));
+    const types = Object.entries(OBSTACLE_TYPES).filter(([, t]) => t.weight > 0 && meters >= t.minMeters && (!kinds || kinds.includes(t.kind)));
     const total = types.reduce((s, [, t]) => s + t.weight, 0);
     let r = Math.random() * total;
     for (const [key, t] of types) {
@@ -47,7 +54,7 @@ export class ObstaclePool {
   }
 
   /** Activates a pooled obstacle of `type` in `lane` at depth `z`. */
-  spawn(type, lane, z) {
+  spawn(type, lane, z, texture = null) {
     const def = OBSTACLE_TYPES[type];
     let o = this.free.pop();
     if (!o) {
@@ -56,9 +63,10 @@ export class ObstaclePool {
         shadow: this.scene.add.image(0, 0, 'fx_shadow')
       };
     }
-    o.img.setTexture(def.texture).setVisible(true).setAngle(0).setAlpha(1).clearTint();
-    o.shadow.setVisible(true);
-    Object.assign(o, { type, def, lane, x: RUNNER.LANES[lane], z, hitDone: false, passed: false, smashed: false, smashT: 0 });
+    o.img.setTexture(texture || def.texture).setVisible(true).setAngle(0).setAlpha(1).clearTint();
+    o.shadow.setVisible(def.kind !== 'deco');
+    const x = def.kind === 'deco' ? 0 : RUNNER.LANES[lane];
+    Object.assign(o, { type, def, lane, x, z, hitDone: def.kind === 'deco', passed: false, smashed: false, smashT: 0, charging: false });
     this.active.push(o);
     return o;
   }
@@ -72,6 +80,14 @@ export class ObstaclePool {
     for (let i = this.active.length - 1; i >= 0; i--) {
       const o = this.active[i];
       o.z -= dz;
+      // Carts charge at the runner once they are close (gameplay-clock based).
+      if (o.def.speed && !o.smashed && o.z < o.def.chargeAt && scene.started && !scene.isOver) {
+        if (!o.charging) {
+          o.charging = true;
+          scene.onCartCharge?.(o);
+        }
+        o.z -= o.def.speed * dt;
+      }
       if (!o.passed && o.z < RUNNER.PLAYER_Z - o.def.d / 2 - 0.4) {
         o.passed = true;
         onPass?.(o);
@@ -89,6 +105,7 @@ export class ObstaclePool {
         o.img.setAlpha(Math.max(0, 1 - o.smashT * 1.5));
         o.x += dt * (o.x >= 0 ? 6 : -6);
       }
+      if (o.charging) y += Math.abs(Math.sin(scene.gameTime * 0.025)) * 0.06; // rattling cart
       placeBillboard(scene, o.img, o.x, y, o.z, o.def.drawH, o.img.height);
       const g = scene.project(o.x, 0, o.z);
       const sw = ((o.def.w + 0.6) * g.s) / 128;

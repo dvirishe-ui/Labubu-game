@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { rollRarity, weightedRarity, pullBlindBox, buyTicket, pityStatus, buySkin, skinPrice, emptyPity } from '../src/systems/GachaSystem.js';
+import { rollRarity, weightedRarity, pullBlindBox, pullMany, buyTicket, pityStatus, buySkin, skinPrice, emptyPity } from '../src/systems/GachaSystem.js';
 import { dailyDeals, buyDeal } from '../src/systems/ShopSystem.js';
 import { PACKS, PACK_ORDER, RARITY_TIERS, RARITY_ORDER, DROP_POOL, CATALOG, packSplit } from '../src/config/GachaDropTable.js';
 import { ECONOMY } from '../src/config/GameConfig.js';
 import { makeSave, seq } from './helpers.js';
+
+/** Amount of `type` in a pull's bonus loot. */
+const bonusOf = (res, type) => res.bonus.filter((b) => b.type === type).reduce((s, b) => s + b.amount, 0);
 
 describe('packs & posted odds', () => {
   it('every pack odds table sums to 100% and only names known tiers', () => {
@@ -117,7 +120,7 @@ describe('pullBlindBox', () => {
     expect(res.itemId).toBe(DROP_POOL.common[0]);
     expect(res.isNew).toBe(true);
     expect(res.cost).toEqual({ currency: 'blindBoxTickets', amount: 1 });
-    expect(save.data.currencies.blindBoxTickets).toBe(tickets - 1);
+    expect(save.data.currencies.blindBoxTickets).toBe(tickets - 1 + bonusOf(res, 'blindBoxTickets'));
     expect(save.hasItem(res.itemId)).toBe(true);
     expect(save.data.stats.boxesOpened).toBe(1);
   });
@@ -129,7 +132,7 @@ describe('pullBlindBox', () => {
     const res = pullBlindBox(save, 'classic', null, seq(0.1, 0));
     expect(res.ok).toBe(true);
     expect(res.cost.currency).toBe('popCoins');
-    expect(save.data.currencies.popCoins).toBe(0);
+    expect(save.data.currencies.popCoins).toBe(bonusOf(res, 'popCoins'));
   });
 
   it('converts duplicates into coins (and gems for Legendary+)', () => {
@@ -139,7 +142,7 @@ describe('pullBlindBox', () => {
     const dup = pullBlindBox(save, 'classic', null, seq(0.1, 0));
     expect(dup.isNew).toBe(false);
     expect(dup.refund.coins).toBe(ECONOMY.DUPLICATE_REFUND.common);
-    expect(save.data.currencies.popCoins).toBe(coins + ECONOMY.DUPLICATE_REFUND.common);
+    expect(save.data.currencies.popCoins).toBe(coins + ECONOMY.DUPLICATE_REFUND.common + bonusOf(dup, 'popCoins'));
 
     save.data.currencies.gems = 1000;
     pullBlindBox(save, 'mega', null, seq(0.7, 0)); // legendary
@@ -147,7 +150,7 @@ describe('pullBlindBox', () => {
     const dupL = pullBlindBox(save, 'mega', null, seq(0.7, 0));
     expect(dupL.rarity).toBe('legendary');
     expect(dupL.refund.gems).toBe(ECONOMY.DUPLICATE_GEMS.legendary);
-    expect(save.data.currencies.gems).toBe(gems - PACKS.mega.costs[0].amount + ECONOMY.DUPLICATE_GEMS.legendary);
+    expect(save.data.currencies.gems).toBe(gems - PACKS.mega.costs[0].amount + ECONOMY.DUPLICATE_GEMS.legendary + bonusOf(dupL, 'gems'));
   });
 
   it('refuses to pull without currency', () => {
@@ -176,6 +179,30 @@ describe('pullBlindBox', () => {
     expect(buyTicket(save)).toBe(true);
     expect(save.data.currencies.blindBoxTickets).toBe(t + 1);
     expect(buyTicket(save)).toBe(false);
+  });
+});
+
+describe('bonus loot & multi-open', () => {
+  it('every box gives coins, and Mega always gives a Head Start', () => {
+    const { save } = makeSave();
+    save.data.currencies.gems = 150;
+    const before = save.data.powerups.headStart;
+    const res = pullBlindBox(save, 'mega', 'gems', seq(0.99, 0.5));
+    expect(bonusOf(res, 'popCoins')).toBeGreaterThanOrEqual(PACKS.mega.bonus.coins[0]);
+    expect(save.data.powerups.headStart).toBe(before + 1);
+  });
+
+  it('opens 5 boxes at once only when all 5 are affordable', () => {
+    const { save } = makeSave();
+    save.data.currencies.blindBoxTickets = 4;
+    save.data.currencies.popCoins = 0;
+    expect(pullMany(save, 'classic', 'blindBoxTickets', 5).ok).toBe(false);
+    save.data.currencies.blindBoxTickets = 5;
+    const res = pullMany(save, 'classic', 'blindBoxTickets', 5, () => 0.99);
+    expect(res.ok).toBe(true);
+    expect(res.results).toHaveLength(5);
+    expect(save.data.stats.boxesOpened).toBe(5);
+    expect(save.data.currencies.blindBoxTickets).toBe(0);
   });
 });
 

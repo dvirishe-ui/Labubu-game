@@ -10,7 +10,9 @@
  *           free daily video reward.
  */
 import Phaser from 'phaser';
-import { WIDTH, HEIGHT, COLORS, GEM_BUNDLES } from '../config/GameConfig.js';
+import { WIDTH, HEIGHT, COLORS, GEM_BUNDLES, RUNNER } from '../config/GameConfig.js';
+import { BOOST_ITEMS, UPGRADES, UPGRADE_ORDER, UPGRADE_COSTS, UPGRADE_STEP, HEAD_START } from '../config/ProgressionConfig.js';
+import { boostCount, buyBoost, upgradeLevel, upgradeCost, buyUpgrade } from '../systems/Boosts.js';
 import { CATALOG, RARITY_TIERS, RARITY_ORDER, PACKS, PACK_ORDER, packSplit } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
 import { chooseCost, pityStatus, skinPrice, buySkin } from '../systems/GachaSystem.js';
@@ -27,9 +29,11 @@ const TABS = [
   { id: 'deals', label: 'Deals' },
   { id: 'boxes', label: 'Boxes' },
   { id: 'skins', label: 'Skins' },
+  { id: 'boosts', label: 'Boosts' },
   { id: 'gems', label: 'Gems' }
 ];
 const CURRENCY_ICON = { popCoins: 'coin', gems: 'gem', blindBoxTickets: 'ticket', goldenKeys: 'key' };
+const UPGRADE_BASE = { magnet: RUNNER.SUPER_MAGNET_DURATION_MS / 1000, star: RUNNER.STAR_MS / 1000, mushroom: RUNNER.MUSHROOM_BOOST.ms / 1000 };
 const CURRENCY_NAME = { popCoins: 'Coins', gems: 'Gems', blindBoxTickets: 'Tickets', goldenKeys: 'Keys' };
 const RARITY_SKIN = { common: 'gray', rare: 'green', epic: 'purple', legendary: 'yellow', secret: 'pink' };
 const SECTION_ORDER = ['legendary', 'epic', 'rare', 'common', 'secret'];
@@ -61,10 +65,10 @@ export class ShopScene extends Phaser.Scene {
     }
 
     const tabsY = portrait ? 176 : 102;
-    const tabW = Math.min(180, (WIDTH - 40) / TABS.length - 8);
+    const tabW = Math.min(170, (WIDTH - 40) / TABS.length - 8);
     const tabsX = WIDTH / 2 - ((TABS.length - 1) * (tabW + 8)) / 2;
     this.tabButtons = TABS.map((t, i) => {
-      const b = makeButton(this, tabsX + i * (tabW + 8), tabsY, t.label, () => this.showTab(t.id), { w: tabW, h: 56, fontSize: 24, skin: 'blue' });
+      const b = makeButton(this, tabsX + i * (tabW + 8), tabsY, t.label, () => this.showTab(t.id), { w: tabW, h: 56, fontSize: tabW < 140 ? 21 : 24, skin: 'blue' });
       b.tabId = t.id;
       return b;
     });
@@ -93,14 +97,14 @@ export class ShopScene extends Phaser.Scene {
     const deals = dailyDeals(Services.save);
     const free = deals.find((d) => d.id === 'free_gift');
     const dealsBtn = this.tabButtons[0];
-    this.dealDot.setPosition(dealsBtn.x + 70, dealsBtn.y - 24).setVisible(free && !free.bought).setDepth(10);
+    this.dealDot.setPosition(dealsBtn.x + dealsBtn.width / 2 - 10, dealsBtn.y - 24).setVisible(free && !free.bought).setDepth(10);
 
     this.list?.destroy();
     this.page.removeAll(true);
     const x0 = (WIDTH - this.CW) / 2;
     this.list = new ScrollList(this, this.page, x0, this.top, this.CW, HEIGHT - this.top - 8);
     this.countdown = null;
-    const builders = { deals: () => this.buildDeals(deals), boxes: () => this.buildBoxes(), skins: () => this.buildSkins(), gems: () => this.buildGems() };
+    const builders = { deals: () => this.buildDeals(deals), boxes: () => this.buildBoxes(), skins: () => this.buildSkins(), boosts: () => this.buildBoosts(), gems: () => this.buildGems() };
     const h = builders[id]();
     this.list.setContentHeight(h + 20);
   }
@@ -246,9 +250,9 @@ export class ShopScene extends Phaser.Scene {
   // -------------------------------------------------------------------------- boxes
 
   buildBoxes() {
-    this.sectionTitle(0, 'Blind Boxes', '#ffe066', 'Every box shows its odds. Mystery Labubus are box-only!');
+    this.sectionTitle(0, 'Blind Boxes', '#ffe066', 'Every box has a figure + bonus coins, boosts & gems!');
     const W = 600;
-    const H = 340;
+    const H = 400;
     const { pos, bottom } = this.grid(PACK_ORDER.length, W, H, 86);
     PACK_ORDER.forEach((id, i) => {
       const pack = PACKS[id];
@@ -259,7 +263,7 @@ export class ShopScene extends Phaser.Scene {
       const glow = this.add.image(112, 186, 'fx_glow').setScale(1.3).setTint(hexNum(pack.colors.front[1])).setAlpha(0.55);
       const box = this.add.image(112, 190, `box_icon_${id}`).setScale(1.45);
       this.tweens.add({ targets: box, y: 178, angle: { from: -3, to: 3 }, yoyo: true, repeat: -1, duration: 1100 + i * 150, ease: 'Sine.easeInOut' });
-      c.add([glow, box, this.add.text(112, 306, pack.tagline, textStyle(15, '#7a6a8a', { align: 'center', wordWrap: { width: 200 } })).setOrigin(0.5)]);
+      c.add([glow, box, this.add.text(112, 330, pack.tagline, textStyle(15, '#7a6a8a', { align: 'center', wordWrap: { width: 200 } })).setOrigin(0.5)]);
 
       // "Regular X% · Mystery Y%" - the headline odds, like a real blind box.
       const split = packSplit(id);
@@ -290,14 +294,20 @@ export class ShopScene extends Phaser.Scene {
         const bx = n === 1 ? 410 : 318 + k * 186;
         const btn = this.priceButton(bx, 312, cost, () => this.openPack(id, cost.currency), { w: n === 1 ? 300 : 172, skin: k === 0 ? 'yellow' : 'green' });
         c.add(btn);
+        // Open 5 at once
+        const five = { currency: cost.currency, amount: cost.amount * 5 };
+        const b5 = this.priceButton(bx, 368, five, () => this.openPack(id, cost.currency, 5), { w: n === 1 ? 300 : 172, h: 46, fontSize: 20, skin: 'purple' });
+        const tag = this.add.container(bx - (n === 1 ? 150 : 86) + 4, 352);
+        tag.add([uiImage(this, -24 - 6, -12 - 4, buttonKey(this, 48, 24, 'red', false)), outlinedText(this, 0, 0, 'x5', 15)]);
+        c.add([b5, tag]);
       });
     });
     return bottom;
   }
 
-  openPack(packId, currency) {
-    if (!chooseCost(Services.save, packId, currency)) return this.notEnough(currency);
-    this.leave('Unboxing', { packId, currency });
+  openPack(packId, currency, count = 1) {
+    if (!chooseCost(Services.save, packId, currency, count)) return this.notEnough(currency);
+    this.leave('Unboxing', { packId, currency, count });
   }
 
   // -------------------------------------------------------------------------- skins
@@ -389,6 +399,68 @@ export class ShopScene extends Phaser.Scene {
         { w: 260, h: 60, fontSize: 26, skin: 'yellow' }
       )
     );
+  }
+
+  // -------------------------------------------------------------------------- boosts & upgrades
+
+  buildBoosts() {
+    this.sectionTitle(0, 'Boosts', '#ffb347', 'Use them at the start of a run!');
+    const W = 320;
+    const H = 330;
+    const keys = Object.keys(BOOST_ITEMS);
+    const g1 = this.grid(keys.length, W, H, 86);
+    keys.forEach((key, i) => {
+      const item = BOOST_ITEMS[key];
+      const c = this.row(g1.pos[i].x, g1.pos[i].y, H);
+      c.add(addPanel(this, 0, 0, W, H, { header: key === 'headStart' ? 0xff7a1a : 0xffb400, headerH: 56, radius: 26 }));
+      c.add(outlinedText(this, W / 2, 29, item.name, 26));
+      const icon = this.add.image(W / 2, 128, item.icon).setScale(1.9);
+      this.tweens.add({ targets: icon, y: 118, angle: { from: -6, to: 6 }, yoyo: true, repeat: -1, duration: 800, ease: 'Sine.easeInOut' });
+      c.add(icon);
+      c.add(this.add.text(W / 2, 192, key === 'headStart' ? `Rocket ride to ${(HEAD_START.BASE_M + HEAD_START.PER_LEVEL_M * upgradeLevel(Services.save, 'headStart')).toLocaleString('en-US')} m!` : item.desc, textStyle(18, '#5a4a6a', { align: 'center', wordWrap: { width: W - 30 } })).setOrigin(0.5));
+      c.add(outlinedText(this, W / 2, 228, `You have ${boostCount(Services.save, key)}`, 22, '#ffe066'));
+      c.add(this.priceButton(W / 2 - 74, 290, { currency: 'popCoins', amount: item.price.popCoins }, () => this.onBuyBoost(key, 'popCoins'), { w: 138, h: 50, fontSize: 21, skin: 'yellow' }));
+      c.add(this.priceButton(W / 2 + 74, 290, { currency: 'gems', amount: item.price.gems }, () => this.onBuyBoost(key, 'gems'), { w: 138, h: 50, fontSize: 21, skin: 'purple' }));
+    });
+
+    let y = g1.bottom + 30;
+    this.sectionTitle(y, 'Upgrades', '#8fd3ff', 'Spend coins to make power-ups last longer');
+    const UW = Math.min(this.CW, 600);
+    const UH = 120;
+    UPGRADE_ORDER.forEach((key, i) => {
+      const up = UPGRADES[key];
+      const lvl = upgradeLevel(Services.save, key);
+      const cost = upgradeCost(Services.save, key);
+      const c = this.row((this.CW - UW) / 2, y + 86 + i * (UH + 14), UH);
+      c.add(addPanel(this, 0, 0, UW, UH, { radius: 24 }));
+      c.add(this.add.circle(62, UH / 2, 40, 0x3d2a52, 0.12));
+      c.add(this.add.image(62, UH / 2, up.icon).setScale(1.25));
+      c.add(this.add.text(118, 30, up.name, textStyle(22, COLORS.text)).setOrigin(0, 0.5));
+      // Level pips
+      for (let k = 0; k < UPGRADE_COSTS.length; k++) {
+        c.add(this.add.rectangle(118 + k * 34, 64, 28, 16, k < lvl ? 0x2fc24f : 0xd9cfe3).setStrokeStyle(2, 0x2d1b3d).setOrigin(0, 0.5));
+      }
+      const fmt = (l) => (key === 'headStart' ? `${(HEAD_START.BASE_M + HEAD_START.PER_LEVEL_M * l).toLocaleString('en-US')} m` : `${(UPGRADE_BASE[key] * (1 + UPGRADE_STEP * l)).toFixed(1)} s`);
+      c.add(this.add.text(118, 94, cost === null ? `${fmt(lvl)} · MAX` : `${fmt(lvl)} → ${fmt(lvl + 1)}`, textStyle(16, '#7a6a8a')).setOrigin(0, 0.5));
+      if (cost === null) c.add(outlinedText(this, UW - 90, UH / 2, 'MAX', 28, '#6ee7a8'));
+      else c.add(this.priceButton(UW - 92, UH / 2, { currency: 'popCoins', amount: cost }, () => this.onUpgrade(key), { w: 150, h: 54, fontSize: 22, skin: 'green' }));
+    });
+    return y + 86 + UPGRADE_ORDER.length * (UH + 14);
+  }
+
+  onBuyBoost(key, currency) {
+    const res = buyBoost(Services.save, key, currency);
+    if (!res.ok) return res.reason === 'insufficient' ? this.notEnough(currency) : Services.audio.play('error');
+    this.celebrate(`+1 ${BOOST_ITEMS[key].name}`, '#ffb347');
+    this.rebuild();
+  }
+
+  onUpgrade(key) {
+    const res = buyUpgrade(Services.save, key);
+    if (!res.ok) return res.reason === 'insufficient' ? this.notEnough('popCoins') : Services.audio.play('error');
+    Services.audio.play('powerup');
+    this.celebrate(`${UPGRADES[key].name} level ${res.level}!`, '#8fd3ff');
+    this.rebuild();
   }
 
   // -------------------------------------------------------------------------- gems

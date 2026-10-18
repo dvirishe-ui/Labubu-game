@@ -8,8 +8,11 @@
  *    horizon) and gently curves left and right.
  *  - Everything adapts to the viewport, so the game is full screen in BOTH
  *    portrait and landscape and re-lays itself out live when the phone rotates.
- *  - Speed ramps with distance (fast from the start); a score multiplier grows
- *    every 300 m. Kid-friendly juice: praise pop-ups, confetti, rainbow
+ *  - Subway Surfers-style difficulty: a gentle start, then speed, tighter gaps
+ *    and new tricks (double-jump crate towers, charging carts, jump-then-roll
+ *    combos) arrive stage by stage. Special zones (Low Gravity, Turbo, Gold
+ *    Rush, Bounce) break up the run. A score multiplier grows every 300 m.
+ *  - Boosts: Head Start (rocket ride) and Score Booster, offered at the start. Kid-friendly juice: praise pop-ups, confetti, rainbow
  *    after-images, coin combos, close calls, L-A-B-U-B-U letters.
  *  - Mario Kart-style extras: 3-2-1-GO with a rocket start, item boxes and a
  *    roulette, boost pads, and a one-ticket revive.
@@ -31,6 +34,11 @@ import { pointerPos, setupCamera } from '../ui/Display.js';
 import { makeButton, makeIconButton, makeProgressBar, Modal, outlinedText, textStyle, displayStyle, floatText } from '../ui/UIKit.js';
 import { uiImage, buttonKey, vignetteKey } from '../ui/Skin.js';
 import { CATALOG, RARITY_TIERS } from '../config/GachaDropTable.js';
+import { HEAD_START, SCORE_BOOSTER_BONUS, BOOST_ITEMS, STAGES } from '../config/ProgressionConfig.js';
+import { speedAt, stageIndexAt, stageAt, ZoneDirector } from '../systems/RunDirector.js';
+import { boostCount, useBoost, durationMult, headStartDistance } from '../systems/Boosts.js';
+import { addXp, runXp, levelInfo } from '../systems/Progression.js';
+import { rewardLabel } from '../systems/Rewards.js';
 
 const SWIPE = 26; // logical px for a swipe
 const TAP_MS = 280;
@@ -81,7 +89,21 @@ export class RunnerScene extends Phaser.Scene {
     this.score = 0;
     this.multiplier = 1;
     this.speed = 0;
-    this.baseSpeed = RUNNER.BASE_SPEED;
+    this.baseSpeed = speedAt(0);
+    this.zones = new ZoneDirector();
+    this.zone = null;
+    this.nextGate = null;
+    this.gravityScale = 1;
+    this.zoneSpeed = 1;
+    this.zoneSpeedTarget = 1;
+    this.tintAlpha = 0;
+    this.stageIndex = 0;
+    this.headStart = null;
+    this.flyHeight = HEAD_START.FLY_Y;
+    this.scoreBonus = 0;
+    this.boostOffer = null;
+    this.doubleHints = 0;
+    this.rowLanes = [];
     this.drawDistance = RUNNER.PLAYER_Z + RUNNER.DRAW_DISTANCE;
     this.coinBank = 0;
     this.coinCount = 0;
@@ -120,6 +142,10 @@ export class RunnerScene extends Phaser.Scene {
     this.perks = computePerks(Services.save.data.equipped);
     // Rarer skins play with a score & coin multiplier (Legendary = x1.5).
     this.skinMult = this.perks.skinMultiplier || 1;
+    // Coin upgrades make the in-run power-ups last longer.
+    const save = Services.save;
+    this.dur = { magnet: durationMult(save, 'magnet'), star: durationMult(save, 'star'), mushroom: durationMult(save, 'mushroom') };
+    this.nextGate = this.zones.nextZone(0);
     wordHuntState(Services.save);
 
     this.computeView();
@@ -282,6 +308,20 @@ export class RunnerScene extends Phaser.Scene {
         emitting: false
       })
       .setDepth(16000);
+    // Twinkling stars in the Low Gravity zone.
+    this.stars = this.add
+      .particles(0, 0, 'p_spark', {
+        x: { min: 0, max: WIDTH },
+        y: { min: 0, max: HEIGHT * 0.45 },
+        lifespan: 1400,
+        scale: { start: 1.1, end: 0 },
+        alpha: { start: 1, end: 0 },
+        tint: [0xffffff, 0xfff6c2, 0xb8d8ff],
+        blendMode: 'ADD',
+        frequency: 60,
+        emitting: false
+      })
+      .setDepth(19001);
     // Warp stars stream out of the vanishing point while boosting.
     this.warp = this.add
       .particles(0, 0, 'p_spark', {
@@ -357,6 +397,12 @@ export class RunnerScene extends Phaser.Scene {
     h.magnetBar.graphics.setDepth(hudDepth).setVisible(false);
 
     h.pause = makeIconButton(this, 0, 0, 'II', () => this.pauseGame(), { size: 60 }).setDepth(hudDepth + 2);
+
+    // Active zone badge
+    h.zone = this.add.container(0, 0).setDepth(hudDepth + 1).setVisible(false);
+    h.zoneBg = this.add.graphics();
+    h.zoneText = outlinedText(this, 0, 0, '', 22, '#ffffff');
+    h.zone.add([h.zoneBg, h.zoneText]);
     this.layoutHud();
     this.refreshLetters();
   }
@@ -376,6 +422,9 @@ export class RunnerScene extends Phaser.Scene {
     h.pause.setPosition(W - 46, 44);
     h.letters.forEach((l, i) => l.setPosition(36 + i * 38, 136));
     h.skin.setPosition(18, 162);
+    h.zone.setPosition(W / 2, this.view.portrait ? 236 : 160);
+    h.zoneBg.clear().fillStyle(0x2d1b3d, 0.55).fillRoundedRect(-170, -20, 340, 40, 20);
+    this.layoutBoostOffer?.();
     h.vignette.setDisplaySize(W, HEIGHT);
     h.combo.setPosition(W / 2, this.view.portrait ? 190 : 120);
     h.item.setPosition(W - 70, this.view.portrait ? 160 : 150);
@@ -400,7 +449,7 @@ export class RunnerScene extends Phaser.Scene {
     const m = Math.floor(this.distance);
     if (m !== this._shownM) {
       this._shownM = m;
-      h.dist.setText(`${m.toLocaleString('en-US')} m`);
+      h.dist.setText(`${m.toLocaleString('en-US')} m · Stage ${this.stageIndex + 1}`);
     }
     const coins = Math.floor(this.coinBank);
     if (coins !== this._shownCoins) {
@@ -412,7 +461,17 @@ export class RunnerScene extends Phaser.Scene {
     }
     const magnet = this.gameTime < this.magnetUntil;
     h.magnetBar.graphics.setVisible(magnet);
-    if (magnet) h.magnetBar.set((this.magnetUntil - this.gameTime) / RUNNER.SUPER_MAGNET_DURATION_MS);
+    if (magnet) h.magnetBar.set((this.magnetUntil - this.gameTime) / (RUNNER.SUPER_MAGNET_DURATION_MS * this.dur.magnet));
+
+    // "DOUBLE JUMP!" hint the first times a crate tower approaches.
+    if (this.doubleHints < 2 && !this.headStart) {
+      const o = this.obstacles.active.find((ob) => ob.def.kind === 'high' && !ob.hinted && ob.z < RUNNER.PLAYER_Z + this.speed * 1.4);
+      if (o) {
+        o.hinted = true;
+        this.doubleHints += 1;
+        this.popText('DOUBLE JUMP!', '#ff8fd0');
+      }
+    }
   }
 
   // -------------------------------------------------------------------------- input
@@ -495,7 +554,7 @@ export class RunnerScene extends Phaser.Scene {
     Services.audio.stopMusic();
     const step = RUNNER.COUNTDOWN_STEP_MS;
     const hint = this.add
-      .text(WIDTH / 2, HEIGHT * 0.5, 'Swipe ← → to switch lanes\nTap to jump · swipe ↓ to roll\nTap on GO! for a rocket start', textStyle(26, '#ffffff', { stroke: '#3d2a52', strokeThickness: 6, align: 'center', lineSpacing: 6 }))
+      .text(WIDTH / 2, HEIGHT * 0.5, 'Swipe ← → to switch lanes\nTap to jump · tap again = DOUBLE JUMP\nSwipe ↓ to roll · tap on GO! = rocket start', textStyle(26, '#ffffff', { stroke: '#3d2a52', strokeThickness: 6, align: 'center', lineSpacing: 6 }))
       .setOrigin(0.5)
       .setDepth(21000);
     const show = (label, color, big) => {
@@ -516,6 +575,7 @@ export class RunnerScene extends Phaser.Scene {
       Services.audio.play('go');
       this.tweens.add({ targets: hint, alpha: 0, duration: 400, delay: 600, onComplete: () => hint.destroy() });
       this.started = true;
+      this.createBoostOffer();
       Services.audio.playMusic('run');
       Services.bus.emit(EVENTS.RUN_STARTED, { perks: this.perks });
     });
@@ -548,9 +608,12 @@ export class RunnerScene extends Phaser.Scene {
     this.boostMult += (target - this.boostMult) * Math.min(1, dt * (target > this.boostMult ? 10 : 3));
     this.player.boosting = this.boostTarget > 1.01 && !this.isOver;
 
+    this.zoneSpeed += (this.zoneSpeedTarget - this.zoneSpeed) * Math.min(1, dt * 1.5);
     if (!this.started) this.speed = 0;
-    else if (!this.isOver) {
-      this.baseSpeed = Math.min(RUNNER.MAX_SPEED, RUNNER.BASE_SPEED + this.distance * RUNNER.SPEED_PER_METER);
+    else if (this.headStart && !this.isOver) {
+      this.speed += (HEAD_START.SPEED - this.speed) * Math.min(1, dt * 2.5);
+    } else if (!this.isOver) {
+      this.baseSpeed = speedAt(this.distance) * this.zoneSpeed;
       this.speed = this.baseSpeed * this.boostMult;
     } else this.speed = Math.max(0, this.speed - 40 * dt);
     const dz = this.speed * dt;
@@ -564,18 +627,22 @@ export class RunnerScene extends Phaser.Scene {
 
     this.player.update(dt, this.speed);
     this.camX += (this.player.x * 0.55 - this.camX) * Math.min(1, dt * 8);
-    this.warp.emitting = this.boostMult > 1.05 && !this.isOver;
+    this.warp.emitting = (this.boostMult > 1.05 || Boolean(this.headStart) || this.zone?.type === 'turbo') && !this.isOver;
     this.warp.setPosition(this.view.cx, this.view.horizonY);
 
     if (this.started && !this.isOver) {
       this.distance += dz;
-      this.multiplier = Math.min(RUNNER.MAX_MULTIPLIER, 1 + Math.floor(this.distance / RUNNER.MULTIPLIER_EVERY_M)) + (this.player.hasStar ? 1 : 0);
-      this.score += dz * 10 * this.multiplier * this.skinMult;
+      this.multiplier = Math.min(RUNNER.MAX_MULTIPLIER, 1 + Math.floor(this.distance / RUNNER.MULTIPLIER_EVERY_M)) + (this.player.hasStar ? 1 : 0) + this.scoreBonus;
+      this.score += dz * 10 * this.multiplier * this.skinMult * (this.zone?.def.scoreMult || 1);
     }
 
     this.renderWorld(dz, dt);
 
     if (this.isOver || !this.started) return;
+    this.updateHeadStart();
+    this.updateZone(dt);
+    this.updateStage();
+    this.updateBoostOffer();
     this.checkCollisions();
     this.updateSpawner();
     this.emitDistanceTicks();
@@ -583,9 +650,159 @@ export class RunnerScene extends Phaser.Scene {
     this.updateMultiplierBadge();
     if (this.combo && this.gameTime - this.lastCoinAt > RUNNER.COMBO_WINDOW_MS) this.endCombo();
 
-    const d = this.distance;
-    if (d > 2000 && d < 4000) this.tint.setFillStyle(0xff7b54, Math.min(0.2, (d - 2000) / 4000));
-    else if (d >= 4000) this.tint.setFillStyle(0x2a1a6a, Math.min(0.32, (d - 4000) / 3000));
+  }
+
+  // -------------------------------------------------------------------------- stages & zones
+
+  /** Stage-up announcements ("STAGE 3 · Wild Woods"). */
+  updateStage() {
+    const i = stageIndexAt(this.distance);
+    if (i <= this.stageIndex) return;
+    this.stageIndex = i;
+    this.popText(`STAGE ${i + 1}!`, '#ffe066');
+    this.time.delayedCall(700, () => floatText(this, WIDTH / 2, HEIGHT * 0.36, `${STAGES[i].name} · faster & trickier!`, '#ffffff', 28));
+    this.confetti.explode(40);
+    Services.audio.play('praise', Math.min(i, 6));
+  }
+
+  /** Enters / leaves special zones: physics, speed, tint, banner. */
+  updateZone(dt) {
+    const zone = this.headStart ? null : this.zones.zoneAt(this.distance);
+    if (zone !== this.zone) {
+      const prev = this.zone;
+      this.zone = zone;
+      if (zone) {
+        const def = zone.def;
+        this.gravityScale = def.gravity;
+        this.zoneSpeedTarget = def.speed;
+        this.tint.setFillStyle(def.tint, this.tintAlpha);
+        this.popText(def.name, '#ffffff');
+        this.time.delayedCall(650, () => floatText(this, WIDTH / 2, HEIGHT * 0.36, def.sub, '#ffe066', 30));
+        Services.audio.play('powerup');
+        this.cameras.main.flash(160, 255, 255, 255);
+        this.stars.emitting = zone.type === 'moon';
+        Services.bus.emit('runner:zone', { type: zone.type });
+      } else if (prev) {
+        this.gravityScale = 1;
+        this.zoneSpeedTarget = 1;
+        this.stars.emitting = false;
+        floatText(this, WIDTH / 2, HEIGHT * 0.36, `${prev.def.name} complete!`, '#6ee7a8', 30);
+      }
+    }
+    const target = this.zone ? this.zone.def.tintAlpha : 0;
+    this.tintAlpha += (target - this.tintAlpha) * Math.min(1, dt * 2);
+    this.tint.setAlpha(1).setFillStyle(this.tint.fillColor, this.tintAlpha);
+    const h = this.hud;
+    h.zone.setVisible(Boolean(this.zone));
+    if (this.zone) {
+      const left = Math.max(0, Math.ceil(this.zone.end - this.distance));
+      h.zoneText.setText(`${this.zone.def.name} · ${left} m`);
+    }
+  }
+
+  // -------------------------------------------------------------------------- boosts (head start / score booster)
+
+  /** Head Start / Score Booster buttons shown for the first seconds of a run. */
+  createBoostOffer() {
+    const save = Services.save;
+    const keys = Object.keys(BOOST_ITEMS).filter((k) => boostCount(save, k) > 0);
+    if (!keys.length) return;
+    const root = this.add.container(0, 0).setDepth(21500);
+    const buttons = keys.map((key, i) => {
+      const item = BOOST_ITEMS[key];
+      const b = makeButton(this, 0, 0, `${item.name}  x${boostCount(save, key)}`, () => this.activateBoost(key, b), {
+        w: 300,
+        h: 64,
+        fontSize: 22,
+        skin: key === 'headStart' ? 'orange' : 'yellow',
+        icon: item.icon,
+        iconScale: 0.8
+      });
+      b.boostKey = key;
+      this.tweens.add({ targets: b, scale: 1.06, yoyo: true, repeat: -1, duration: 420, delay: i * 120 });
+      root.add(b);
+      return b;
+    });
+    const label = outlinedText(this, 0, 0, 'Use a boost?', 26, '#ffffff');
+    root.add(label);
+    this.boostOffer = { root, buttons, label, until: Infinity };
+    this.layoutBoostOffer();
+  }
+
+  layoutBoostOffer() {
+    const o = this.boostOffer;
+    if (!o) return;
+    const y = HEIGHT - (this.view.portrait ? 120 : 70);
+    const stack = this.view.portrait;
+    o.buttons.forEach((b, i) => {
+      if (stack) b.setPosition(WIDTH / 2, y - (o.buttons.length - 1 - i) * 78);
+      else b.setPosition(WIDTH / 2 + (i - (o.buttons.length - 1) / 2) * 320, y);
+    });
+    o.label.setPosition(WIDTH / 2, (stack ? y - (o.buttons.length - 1) * 78 : y) - 60);
+  }
+
+  updateBoostOffer() {
+    const o = this.boostOffer;
+    if (!o) return;
+    if (o.until === Infinity) o.until = this.gameTime + 5000;
+    if (this.gameTime > o.until || this.distance > 120) this.closeBoostOffer();
+  }
+
+  closeBoostOffer() {
+    const o = this.boostOffer;
+    if (!o) return;
+    this.boostOffer = null;
+    this.tweens.add({ targets: o.root, alpha: 0, y: 60, duration: 250, onComplete: () => o.root.destroy() });
+  }
+
+  activateBoost(key, btn) {
+    if (!this.started || this.isOver || !useBoost(Services.save, key)) return;
+    btn.setEnabled(false);
+    if (key === 'headStart') this.startHeadStart();
+    else {
+      this.scoreBonus += SCORE_BOOSTER_BONUS;
+      Services.audio.play('star');
+      this.popText(`SCORE BOOST +${SCORE_BOOSTER_BONUS}!`, '#ffe066');
+    }
+    // One of each per run.
+    const o = this.boostOffer;
+    if (!o) return;
+    o.buttons = o.buttons.filter((b) => b !== btn);
+    this.tweens.killTweensOf(btn);
+    this.tweens.add({ targets: btn, scale: 0, duration: 200, onComplete: () => btn.destroy() });
+    if (!o.buttons.length) this.closeBoostOffer();
+  }
+
+  startHeadStart() {
+    this.headStart = { to: this.distance + headStartDistance(Services.save) };
+    this.obstacles.clear();
+    this.player.startFlying();
+    this.zoneSpeedTarget = 1;
+    Services.audio.play('rocket');
+    this.popText('HEAD START!', '#ff9f43');
+    this.cameras.main.flash(200, 255, 220, 160);
+    this.cameras.main.shake(300, 0.006);
+    this.closeBoostOffer();
+  }
+
+  updateHeadStart() {
+    const hs = this.headStart;
+    if (!hs) return;
+    if (this.distance >= hs.to) {
+      this.headStart = null;
+      this.player.stopFlying();
+      this.obstacles.clearNear(RUNNER.PLAYER_Z + 40);
+      this.speed = speedAt(this.distance);
+      this.popText('GO GO GO!', '#6ee7a8');
+      Services.audio.play('boost');
+    }
+  }
+
+  /** A cart starts charging: warn with a beep and a "!" over its lane. */
+  onCartCharge(o) {
+    Services.audio.play('countdown');
+    const f = this.project(o.x, 2, o.z);
+    floatText(this, f.x, Math.max(f.y, this.view.horizonY + 30), '!', '#ff5a6e', 54);
   }
 
   /** Moves the world by dz metres and draws it. */
@@ -663,7 +880,7 @@ export class RunnerScene extends Phaser.Scene {
 
   checkCollisions() {
     const p = this.player;
-    if (p.isCrashed) return;
+    if (p.isCrashed || this.headStart) return;
     for (const o of this.obstacles.active) {
       if (o.hitDone || (o.ignoreUntil && this.gameTime < o.ignoreUntil)) continue;
       const def = o.def;
@@ -676,7 +893,7 @@ export class RunnerScene extends Phaser.Scene {
       if (!hit) continue;
 
       // Swerving into the side of a wall just bumps you back (kid-friendly).
-      if (def.kind === 'wall' && p.isChangingLane && o.lane === p.lane && p.prevLane !== o.lane) {
+      if ((def.kind === 'wall' || def.kind === 'high') && p.isChangingLane && o.lane === p.lane && p.prevLane !== o.lane) {
         p.bounceBack();
         o.ignoreUntil = this.gameTime + 350;
         this.stumble();
@@ -725,7 +942,7 @@ export class RunnerScene extends Phaser.Scene {
     const overlapping = Math.abs(o.x - p.x) < o.def.w / 2 + 0.3;
     if (!overlapping) return;
     let gap = Infinity;
-    if (o.def.kind === 'jump') gap = p.y - o.def.h;
+    if (o.def.kind === 'jump' || o.def.kind === 'high') gap = p.y - o.def.h;
     else if (o.def.kind === 'duck') gap = o.def.clear - (p.y + p.height);
     if (gap >= 0 && gap < RUNNER.CLOSE_CALL_M) {
       this.closeCalls += 1;
@@ -733,6 +950,7 @@ export class RunnerScene extends Phaser.Scene {
       Services.audio.play('closeCall');
       floatText(this, WIDTH / 2, HEIGHT * 0.5, 'CLOSE CALL! +2', '#6ee7a8', 30);
     }
+    if (o.def.kind === 'high' && p.y > o.def.h) floatText(this, WIDTH / 2, HEIGHT * 0.42, 'DOUBLE JUMP! +3', '#ffe066', 32), (this.coinBank += 3);
     this.streak += 1;
     if (this.streak % 6 === 0) this.praise();
   }
@@ -746,60 +964,136 @@ export class RunnerScene extends Phaser.Scene {
    */
   updateSpawner() {
     while (this.nextRowAt < this.distance + this.drawDistance) {
-      const gap = Phaser.Math.Clamp(Math.max(this.speed, RUNNER.BASE_SPEED) * 0.95, 15, 32);
-      this.spawnRow(this.nextRowAt - this.distance, gap);
-      this.nextRowAt += gap;
+      const rowM = this.nextRowAt;
+      const st = stageAt(rowM);
+      const zone = this.zones.zoneAt(rowM);
+      const speed = this.headStart ? RUNNER.BASE_SPEED : Math.max(this.speed, speedAt(rowM));
+      let gap = Phaser.Math.Clamp(speed * 0.95, 14, 32) * st.gapMult;
+      if (zone?.type === 'moon') gap *= 1.45; // long floaty jumps need room
+      if (zone?.type === 'turbo') gap *= 1.25;
+      const extra = this.spawnRow(rowM - this.distance, gap) || 0;
+      this.nextRowAt += gap + extra;
     }
   }
 
-  /** Lays out one "row" at depth z: obstacles, coins, items, letters. */
+  /** Lanes that had obstacles in the last two rows (carts avoid them). */
+  busyLanes() {
+    const set = new Set();
+    for (const r of this.rowLanes.slice(-2)) r.forEach((l) => set.add(l));
+    return set;
+  }
+
+  /**
+   * Lays out one "row" at depth z: obstacles, coins, items, letters.
+   * Returns extra metres used (combos take more room).
+   */
   spawnRow(z, gap) {
     const m = this.distance + z; // track position of this row (difficulty)
     const lanes = Phaser.Utils.Array.Shuffle([0, 1, 2]);
     const P = this.pickups;
+    const O = this.obstacles;
+    const used = [];
+    const put = (type, lane, zz = z) => {
+      O.spawn(type, lane, zz);
+      used.push(lane);
+    };
+
+    // Zone gate arch exactly where the next zone begins.
+    if (this.nextGate && m + gap > this.nextGate.start) {
+      O.spawn('arch', 1, z + Math.max(0, this.nextGate.start - m), `zone_${this.nextGate.type}`);
+      this.nextGate = this.zones.nextZone(this.nextGate.end);
+    }
+
+    // Head Start flight: only a high coin trail until the rocket lands.
+    if (this.headStart && m < this.headStart.to + 45) {
+      if (m < this.headStart.to - 30) P.spawnLine(lanes[0], z, 5, 3, HEAD_START.FLY_Y + 0.4);
+      return 0;
+    }
 
     // Warm-up: coins only.
-    if (m < 35) {
+    if (m < 40) {
       P.spawnLine(lanes[0], z, 6);
-      return;
+      return 0;
     }
 
-    const roll = Math.random();
+    let extra = 0;
     let free = [];
-    if (roll < 0.14) {
-      // Breather: zig-zag coin trail (+ boost pad)
-      P.spawnLine(lanes[0], z, 4);
-      P.spawnLine(lanes[1], z + 9, 4);
-      if (Math.random() < 0.5) P.spawn('boost', RUNNER.LANES[lanes[2]], 0, z + 4);
-      free = [lanes[2]];
-    } else if (roll < 0.42 || m < 150) {
-      // One hazard; coins in another lane or arcing over it
-      const type = this.obstacles.randomType(m);
-      this.obstacles.spawn(type, lanes[0], z);
-      if (OBSTACLE_TYPES[type].kind === 'jump' && Math.random() < 0.55) P.spawnArc(lanes[0], z, 7, 9, 1.9);
-      else P.spawnLine(lanes[1], z - 6, 6);
-      free = [lanes[1], lanes[2]];
-    } else if (roll < 0.66) {
-      // Two hazards, one open lane full of coins
-      this.obstacles.spawn(this.obstacles.randomType(m), lanes[0], z);
-      this.obstacles.spawn(this.obstacles.randomType(m, ['jump', 'duck']), lanes[1], z);
-      P.spawnLine(lanes[2], z - 7, 7);
-      free = [lanes[2]];
-    } else if (roll < 0.8 && m > 220) {
-      // Full-width jump row (everyone must hop) with a coin arc
-      for (const l of lanes) this.obstacles.spawn(this.obstacles.randomType(m, ['jump']), l, z);
-      P.spawnArc(lanes[0], z, 7, 9, 2.1);
-    } else if (roll < 0.9 && m > 200) {
-      // Gates in every lane: roll under!
-      for (const l of lanes) this.obstacles.spawn('gate', l, z);
-      P.spawnLine(lanes[1], z - 2, 4, 1.6, 0.35);
+    const zone = this.zones.zoneAt(m);
+    if (zone) {
+      free = this.spawnZoneRow(zone.type, z, lanes, put);
     } else {
-      // Two toadstool houses: find the gap
-      this.obstacles.spawn('tower', lanes[0], z);
-      this.obstacles.spawn('tower', lanes[1], z);
-      P.spawnLine(lanes[2], z - 10, 8);
-      free = [lanes[2]];
+      const st = stageAt(m);
+      const idx = stageIndexAt(m);
+      let r = Math.random();
+      const pick = (chance) => {
+        if (r < chance) return true;
+        r -= chance;
+        return false;
+      };
+      if (pick(st.breather)) {
+        // Breather: zig-zag coin trail (+ boost pad)
+        P.spawnLine(lanes[0], z, 4);
+        P.spawnLine(lanes[1], z + 9, 4);
+        if (Math.random() < 0.5) P.spawn('boost', RUNNER.LANES[lanes[2]], 0, z + 4);
+        free = [lanes[2]];
+      } else if (pick(st.highWall)) {
+        // Candy-crate towers: DOUBLE JUMP over them (or dodge if a lane is open)
+        const all = idx >= 3 && Math.random() < 0.35;
+        const count = all ? 3 : idx >= 2 && Math.random() < 0.5 ? 2 : 1;
+        for (let i = 0; i < count; i++) put('crates', lanes[i]);
+        P.spawnArc(lanes[0], z, 9, 11, 2.7);
+        if (count < 3) {
+          P.spawnLine(lanes[2], z - 6, 5);
+          free = [lanes[2]];
+        }
+      } else if (pick(st.cart)) {
+        // A charging cart in a lane that was clear in the last rows
+        const busy = this.busyLanes();
+        const lane = lanes.find((l) => !busy.has(l)) ?? lanes[0];
+        put('cart', lane, z);
+        const others = lanes.filter((l) => l !== lane);
+        if (idx >= 3) put(O.randomType(m, ['jump', 'duck']), others[0], z - 10);
+        P.spawnLine(others[1], z - 8, 6);
+        free = [others[1]];
+      } else if (pick(st.combo)) {
+        // Jump-then-roll combo across every lane
+        for (const l of lanes) put(O.randomType(m, ['jump']), l);
+        const after = Math.max(9, this.speed * 0.75);
+        for (const l of lanes) O.spawn('gate', l, z + after);
+        P.spawnArc(lanes[0], z, 7, 9, 2.1);
+        P.spawnLine(lanes[1], z + after - 1.5, 4, 1.6, 0.35);
+        extra = after;
+      } else if (pick(st.fullRow) && m > 220) {
+        if (Math.random() < 0.55) {
+          for (const l of lanes) put(O.randomType(m, ['jump']), l);
+          P.spawnArc(lanes[0], z, 7, 9, 2.1);
+        } else {
+          for (const l of lanes) put('gate', l);
+          P.spawnLine(lanes[1], z - 2, 4, 1.6, 0.35);
+        }
+      } else if (pick(st.pairs)) {
+        // Two hazards, one open lane full of coins
+        put(O.randomType(m), lanes[0]);
+        put(O.randomType(m, ['jump', 'duck']), lanes[1]);
+        P.spawnLine(lanes[2], z - 7, 7);
+        free = [lanes[2]];
+      } else if (Math.random() < 0.2) {
+        // Two toadstool houses: find the gap
+        put('tower', lanes[0]);
+        put('tower', lanes[1]);
+        P.spawnLine(lanes[2], z - 10, 8);
+        free = [lanes[2]];
+      } else {
+        // One hazard; coins in another lane or arcing over it
+        const type = O.randomType(m);
+        put(type, lanes[0]);
+        if (OBSTACLE_TYPES[type].kind === 'jump' && Math.random() < 0.55) P.spawnArc(lanes[0], z, 7, 9, 1.9);
+        else P.spawnLine(lanes[1], z - 6, 6);
+        free = [lanes[1], lanes[2]];
+      }
     }
+    this.rowLanes.push(used);
+    if (this.rowLanes.length > 4) this.rowLanes.shift();
 
     const lane = free.length ? free[Math.floor(Math.random() * free.length)] : lanes[2];
     const ahead = z + gap * 0.5;
@@ -812,13 +1106,45 @@ export class RunnerScene extends Phaser.Scene {
       if (idx >= 0) {
         P.spawn('letter', RUNNER.LANES[lane], 0.7, ahead, { letter: WORD_HUNT.WORD[idx], index: idx });
       }
-    } else if (Math.random() < 0.12) {
+    } else if (Math.random() < 0.1) {
       P.spawn('boost', RUNNER.LANES[lane], 0, ahead);
     } else if (m > 150 && this.ticketsFound < 3 && Math.random() < 0.04 * (1 + this.perks.ticketLuck)) {
       P.spawn('ticket', RUNNER.LANES[lane], 1.9, ahead);
     } else if (Math.random() < 0.05) {
       P.spawn('magnet', RUNNER.LANES[lane], 0.7, ahead);
     }
+    return extra;
+  }
+
+  /** Rows inside special zones. Returns the lanes left open. */
+  spawnZoneRow(type, z, lanes, put) {
+    const P = this.pickups;
+    if (type === 'moon') {
+      // Floaty jumps: crate towers and coins high in the sky
+      const count = Math.random() < 0.4 ? 3 : 2;
+      for (let i = 0; i < count; i++) put('crates', lanes[i]);
+      for (const l of lanes) P.spawnArc(l, z, 9, 16, 3.6);
+      return count < 3 ? [lanes[2]] : [];
+    }
+    if (type === 'gold') {
+      // Coins everywhere, the odd low stump
+      for (const l of lanes) P.spawnLine(l, z - 8, 7);
+      if (Math.random() < 0.4) put('stump', lanes[0], z + 6);
+      return [lanes[1], lanes[2]];
+    }
+    if (type === 'bounce') {
+      // Springs launch you over a wall of crate towers
+      for (const l of lanes) P.spawn('spring', RUNNER.LANES[l], 0, z);
+      for (const l of lanes) put('crates', l, z + 8);
+      P.spawnArc(lanes[0], z + 6, 9, 14, 3.4);
+      P.spawnArc(lanes[1], z + 6, 9, 14, 3.4);
+      return [];
+    }
+    // turbo: boost pads + single hazards, double score
+    put(this.obstacles.randomType(this.distance + z, ['jump', 'duck']), lanes[0]);
+    P.spawn('boost', RUNNER.LANES[lanes[1]], 0, z - 4);
+    P.spawnLine(lanes[2], z - 8, 8);
+    return [lanes[1], lanes[2]];
   }
 
   emitDistanceTicks() {
@@ -909,19 +1235,19 @@ export class RunnerScene extends Phaser.Scene {
     h.itemLabel.setText('');
     switch (key) {
       case 'mushroom':
-        this.startBoost(RUNNER.MUSHROOM_BOOST);
+        this.startBoost({ ...RUNNER.MUSHROOM_BOOST, ms: RUNNER.MUSHROOM_BOOST.ms * this.dur.mushroom });
         Services.audio.play('boost');
         this.popText('DASH!', '#ff8fb1');
         break;
       case 'star':
-        this.player.starUntil = this.gameTime + RUNNER.STAR_MS;
+        this.player.starUntil = this.gameTime + RUNNER.STAR_MS * this.dur.star;
         Services.audio.play('star');
         this.popText('SUPER STAR!', '#ffe066');
         this.confetti.explode(50);
         this.cameras.main.flash(150, 255, 245, 180);
         break;
       case 'magnet':
-        this.magnetUntil = this.gameTime + RUNNER.SUPER_MAGNET_DURATION_MS;
+        this.magnetUntil = this.gameTime + RUNNER.SUPER_MAGNET_DURATION_MS * this.dur.magnet;
         Services.audio.play('powerup');
         this.popText('MAGNET!', '#8fd3ff');
         break;
@@ -948,7 +1274,7 @@ export class RunnerScene extends Phaser.Scene {
       this.lastCoinAt = now;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       this.coinCount += 1;
-      this.coinBank += RUNNER.COIN_VALUE * this.perks.coinMultiplier * this.skinMult;
+      this.coinBank += RUNNER.COIN_VALUE * this.perks.coinMultiplier * this.skinMult * (this.zone?.def.coinMult || 1);
       this.score += 5 * this.multiplier * this.skinMult;
       Services.audio.play('coin');
       this.sparkle.explode(3, f.x, f.y);
@@ -971,13 +1297,18 @@ export class RunnerScene extends Phaser.Scene {
       this.popText('+1 TICKET!', '#ff8fb1');
       Services.bus.emit(EVENTS.TICKET_COLLECTED, { amount: 1 });
     } else if (p.kind === 'magnet') {
-      this.magnetUntil = this.gameTime + RUNNER.SUPER_MAGNET_DURATION_MS;
+      this.magnetUntil = this.gameTime + RUNNER.SUPER_MAGNET_DURATION_MS * this.dur.magnet;
       Services.audio.play('powerup');
       this.popText('MAGNET!', '#8fd3ff');
     } else if (p.kind === 'itembox') {
       Services.audio.play('itemBox');
       this.sparkle.explode(14, f.x, f.y);
       this.startRoulette();
+    } else if (p.kind === 'spring') {
+      this.player.bounce(15.5);
+      Services.audio.play('jump');
+      this.sparkle.explode(10, f.x, f.y);
+      floatText(this, f.x, f.y - 30, 'BOING!', '#ff8fd0', 30);
     } else if (p.kind === 'boost') {
       this.startBoost(RUNNER.PAD_BOOST);
       Services.audio.play('boost');
@@ -1128,10 +1459,12 @@ export class RunnerScene extends Phaser.Scene {
     const prevBest = Services.save.data.stats.highScore;
     const { isHighScore } = Services.save.recordRun({ distance, coins, tickets: this.ticketsFound, score });
     Services.bus.emit(EVENTS.RUN_ENDED, { distance, coins, score, tickets: this.ticketsFound, cause });
-    this.time.delayedCall(cause === 'quit' ? 100 : 500, () => this.showResults({ coins, distance, score, isHighScore, prevBest }));
+    const xp = addXp(Services.save, runXp({ distance, coins }));
+    this.closeBoostOffer();
+    this.time.delayedCall(cause === 'quit' ? 100 : 500, () => this.showResults({ coins, distance, score, isHighScore, prevBest, xp }));
   }
 
-  showResults({ coins, distance, score, isHighScore, prevBest }) {
+  showResults({ coins, distance, score, isHighScore, prevBest, xp }) {
     if (isHighScore) {
       Services.audio.play('highScore');
       this.confetti.explode(120);
@@ -1145,15 +1478,24 @@ export class RunnerScene extends Phaser.Scene {
       ['Best score', `${Math.max(prevBest, score).toLocaleString('en-US')}`]
     ];
     lines.forEach(([label, value], i) => {
-      const y = 170 + i * 48;
+      const y = 160 + i * 44;
       modal.add([
         this.add.text(70, y, label, textStyle(23, '#7a6a8a')).setOrigin(0, 0.5),
         this.add.text(570, y, value, displayStyle(26, i === 1 ? '#d18a00' : COLORS.text)).setOrigin(1, 0.5)
       ]);
     });
+    // XP bar toward the next level
+    const lv = levelInfo(Services.save.data.progress.xp);
+    const bar = makeProgressBar(this, 150, 336, 340, 20, { fill: 0x8a4dff });
+    bar.set(lv.into / lv.need);
+    modal.add([
+      outlinedText(this, 104, 346, `Lv ${lv.level}`, 24, '#b07cff'),
+      bar.graphics,
+      outlinedText(this, 548, 346, `+${xp?.gained ?? 0} XP`, 22, '#d2a8ff')
+    ]);
     const st = wordHuntState(Services.save);
     WORD_HUNT.WORD.split('').forEach((ch, i) => {
-      const img = this.add.image(200 + i * 48, 375, `letter_${ch}`).setScale(0.42);
+      const img = this.add.image(200 + i * 48, 392, `letter_${ch}`).setScale(0.36);
       if (!st.collected[i]) img.setTintFill(0x3d2a52).setAlpha(0.3);
       modal.add(img);
     });
@@ -1162,7 +1504,8 @@ export class RunnerScene extends Phaser.Scene {
       this.cameras.main.fadeOut(200, 43, 29, 58);
       this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(key, data));
     };
-    modal.add(makeButton(this, 320, 458, 'PLAY AGAIN', () => leave('Runner'), { w: 340, h: 80, fontSize: 34, color: COLORS.gold, colorDark: COLORS.goldDark }));
+    if (xp?.levelUps.length) this.time.delayedCall(700, () => this.showLevelUp(xp.levelUps));
+    modal.add(makeButton(this, 320, 466, 'PLAY AGAIN', () => leave('Runner'), { w: 340, h: 80, fontSize: 34, color: COLORS.gold, colorDark: COLORS.goldDark }));
     modal.add(makeButton(this, 180, 548, 'Menu', () => leave('MainMenu'), { w: 230, h: 58, fontSize: 24, color: COLORS.mint, colorDark: 0x4fb594 }));
     const hasTicket = Services.save.data.currencies.blindBoxTickets > 0;
     const boxBtn = makeButton(this, 460, 548, hasTicket ? 'Open Box' : 'Shop', () => (hasTicket ? leave('Unboxing', { packId: 'classic', currency: 'blindBoxTickets' }) : leave('Shop')), {
@@ -1175,5 +1518,19 @@ export class RunnerScene extends Phaser.Scene {
     });
     modal.add(boxBtn);
   }
-}
 
+  /** Brawl Stars-style level-up celebration with the rewards it gave. */
+  showLevelUp(levelUps) {
+    const last = levelUps[levelUps.length - 1];
+    const rewards = levelUps.flatMap((l) => l.rewards);
+    Services.audio.play('highScore');
+    this.confetti.explode(100);
+    const modal = new Modal(this, { width: 520, height: 380, title: 'LEVEL UP!', depth: 31000, ribbon: 'purple' });
+    const badge = this.add.container(260, 120);
+    badge.add([this.add.image(0, 0, 'fx_rays').setScale(0.5).setTint(0xb07cff).setAlpha(0.6), this.add.circle(0, 0, 50, 0x8a4dff).setStrokeStyle(6, 0xffffff), outlinedText(this, 0, 2, String(last.level), 48)]);
+    this.tweens.add({ targets: badge, scale: { from: 0.4, to: 1 }, duration: 500, ease: 'Back.easeOut' });
+    modal.add(badge);
+    modal.add(this.add.text(260, 214, rewards.map((r) => rewardLabel(r)).join('   '), textStyle(22, '#5a4a6a', { align: 'center', wordWrap: { width: 460 } })).setOrigin(0.5, 0));
+    modal.add(makeButton(this, 260, 320, 'Awesome!', () => modal.close(), { w: 240, h: 60, fontSize: 26, skin: 'yellow' }));
+  }
+}

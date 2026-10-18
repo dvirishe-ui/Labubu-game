@@ -8,6 +8,7 @@
  */
 import { RARITY_TIERS, RARITY_ORDER, DROP_POOL, CATALOG, PACKS, SKIN_PRICES } from '../config/GachaDropTable.js';
 import { ECONOMY } from '../config/GameConfig.js';
+import { grantRewards } from './Rewards.js';
 
 /** Weighted pick from a pack's `odds`, restricted to tiers with rank >= minRank. */
 export function weightedRarity(odds, rng = Math.random, minRank = 0) {
@@ -65,13 +66,29 @@ export function pickItem(rarity, rng = Math.random) {
   return pool[Math.floor(rng() * pool.length) % pool.length];
 }
 
-/** The first way to pay for `packId` the player can afford (or a specific currency). */
-export function chooseCost(saveManager, packId, currency = null) {
+/**
+ * The first way to pay for `count` boxes of `packId` the player can afford
+ * (optionally only with `currency`). Returns the per-box cost or null.
+ */
+export function chooseCost(saveManager, packId, currency = null, count = 1) {
   const pack = PACKS[packId];
   if (!pack) return null;
   const c = saveManager.data.currencies;
   const options = currency ? pack.costs.filter((o) => o.currency === currency) : pack.costs;
-  return options.find((o) => (c[o.currency] ?? 0) >= o.amount) || null;
+  return options.find((o) => (c[o.currency] ?? 0) >= o.amount * count) || null;
+}
+
+const between = ([lo, hi], rng) => lo + Math.floor(rng() * (hi - lo + 1));
+
+/** Bonus loot that comes with every box of `pack`: coins + random extras. */
+export function rollBonus(pack, rng = Math.random) {
+  const b = pack.bonus;
+  if (!b) return [];
+  const out = [{ type: 'popCoins', amount: between(b.coins, rng) }];
+  for (const e of b.extras) {
+    if (rng() < e.chance) out.push({ type: e.type, amount: Array.isArray(e.amount) ? between(e.amount, rng) : e.amount });
+  }
+  return out;
 }
 
 /** Pulls left before each pity guarantee for a pack (for the UI). */
@@ -107,6 +124,8 @@ export function pullBlindBox(saveManager, packId = 'classic', currency = null, r
   data.pity[packId] = pity;
   data.stats.boxesOpened += 1;
 
+  const bonus = grantRewards(saveManager, rollBonus(pack, rng));
+
   const refund = { coins: 0, keys: 0, gems: 0 };
   if (!isNew) {
     refund.coins = ECONOMY.DUPLICATE_REFUND[rarity] || 0;
@@ -119,7 +138,23 @@ export function pullBlindBox(saveManager, packId = 'classic', currency = null, r
   }
 
   saveManager.save('gacha');
-  return { ok: true, itemId, item: CATALOG[itemId], rarity, isNew, refund, pityTriggered, packId, cost };
+  return { ok: true, itemId, item: CATALOG[itemId], rarity, isNew, refund, bonus, pityTriggered, packId, cost };
+}
+
+/**
+ * Opens `count` boxes in one go (only if all of them can be paid for with the
+ * same currency). Returns { ok, results, reason? }.
+ */
+export function pullMany(saveManager, packId, currency = null, count = 1, rng = Math.random) {
+  const cost = chooseCost(saveManager, packId, currency, count);
+  if (!cost) return { ok: false, reason: 'insufficient', results: [] };
+  const results = [];
+  for (let i = 0; i < count; i++) {
+    const r = pullBlindBox(saveManager, packId, cost.currency, rng);
+    if (!r.ok) break;
+    results.push(r);
+  }
+  return { ok: results.length > 0, results, cost };
 }
 
 /** Converts Pop Coins into a ticket. */

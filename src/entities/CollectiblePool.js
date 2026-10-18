@@ -16,7 +16,8 @@ export const PICKUP_TYPES = {
   magnet: { texture: 'magnet', size: 0.9 },
   itembox: { texture: 'item_box', size: 1.0 },
   letter: { texture: 'letter_L', size: 1.25 },
-  boost: { texture: 'boost_pad', size: 0.32, flat: true }
+  boost: { texture: 'boost_pad', size: 0.32, flat: true },
+  spring: { texture: 'spring', size: 0.75 }
 };
 
 const MAGNET_PULL = 32; // m/s at which magnetised coins home in
@@ -125,8 +126,8 @@ export class CollectiblePool {
 
       // Collection test
       const dzp = Math.abs(p.z - pz);
-      if (p.kind === 'boost') {
-        if (!p.used && dzp < 1.2 && Math.abs(p.x - player.x) < 1.2 && player.y < 0.4) {
+      if (p.kind === 'boost' || p.kind === 'spring') {
+        if (!p.used && dzp < 1.2 && Math.abs(p.x - player.x) < 1.2 && player.y < (p.kind === 'spring' ? 0.8 : 0.4)) {
           p.used = true;
           p.img.setTint(0xffffff);
           onCollect?.(p);
