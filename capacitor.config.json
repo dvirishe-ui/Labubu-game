@@ -1,0 +1,11 @@
+{
+  "appId": "com.labubu.blindboxrun",
+  "appName": "Labubu Run",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}
