@@ -337,17 +337,22 @@ export class Player {
 
     const texRes = this.isCrashed ? RES : BACK_TEX_RES;
     const base = (DRAW_HEIGHT_M * feet.s) / (176 * texRes);
-    this.sprite.setPosition(feet.x, feet.y);
-    this.sprite.setScale(base * this.squash.x, base * this.squash.y);
+    // Smooth, continuous running bounce and sway between the sheet frames.
+    const running = this.state === PlayerState.RUN && !this.isCrashed;
+    const step = Math.sin(this.runPhase * Math.PI * 0.5);
+    const bounce = running ? Math.abs(step) * 0.07 * feet.s : 0;
+    const sway = running ? step * 2.2 : 0;
+    this.sprite.setPosition(feet.x, feet.y - bounce);
+    this.sprite.setScale(base * this.squash.x, base * this.squash.y * (running ? 1 + Math.abs(step) * 0.025 : 1));
     const lean = Phaser.Math.Clamp((RUNNER.LANES[this.lane] - this.x) * 9, -16, 16);
-    this.sprite.setAngle(lean + this.spin);
+    this.sprite.setAngle(lean + sway + this.spin);
 
     if (this.hasStar) this.sprite.setTint(Phaser.Display.Color.HSVToRGB((now / 280) % 1, 0.55, 1).color);
     else this.sprite.clearTint();
     this.sprite.setAlpha(!this.hasStar && now < this.invulnerableUntil ? (Math.floor(now / 80) % 2 ? 0.35 : 1) : 1);
 
     // Rainbow / boost after-images trail behind (toward the camera).
-    if ((this.boosting || this.hasStar) && now > this.nextAfterimageAt && !this.isCrashed) {
+    if ((this.boosting || this.hasStar) && !this.lowFx && now > this.nextAfterimageAt && !this.isCrashed) {
       this.nextAfterimageAt = now + 40;
       const ghost = this.afterimages[this.afterimageIndex++ % AFTERIMAGES];
       this.scene.tweens.killTweensOf(ghost);

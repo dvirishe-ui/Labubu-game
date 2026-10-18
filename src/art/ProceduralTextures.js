@@ -1667,6 +1667,16 @@ function crate(ctx, x, y, w, h, top, bottom) {
 }
 
 function makeAdventure(scene) {
+  // Horizon haze: soft band that melts the far road and hills into the sky.
+  canvasTexture(scene, 'fx_haze', 8, 128, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0, 'rgba(255,227,242,0)');
+    g.addColorStop(0.5, 'rgba(255,227,242,0.75)');
+    g.addColorStop(1, 'rgba(255,227,242,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 8, 128);
+  });
+
   // Tall candy-crate tower: too high for one jump - DOUBLE JUMP over it!
   canvasTexture(scene, 'obs_crates', 240, 340, (ctx) => {
     crate(ctx, 8, 214, 224, 120, '#ff9ec7', '#e0567f');

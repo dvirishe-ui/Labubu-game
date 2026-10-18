@@ -7,6 +7,7 @@
  */
 import Phaser from 'phaser';
 import { generateAllTextures } from '../art/ProceduralTextures.js';
+import { makeBitmapFont } from '../ui/BitmapFont.js';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -16,6 +17,7 @@ export class BootScene extends Phaser.Scene {
   create() {
     document.getElementById('boot-fallback')?.remove();
     generateAllTextures(this);
+    makeBitmapFont(this);
     this.scene.start('Preloader');
   }
 }

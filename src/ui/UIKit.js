@@ -9,6 +9,7 @@ import Phaser from 'phaser';
 import { COLORS, FONT, FONT_DISPLAY, WIDTH, HEIGHT, EVENTS, RES } from '../config/GameConfig.js';
 import { Services } from '../systems/Services.js';
 import { INK, uiImage, addPanel, buttonKey, roundKey, pillKey } from './Skin.js';
+import { HUD_FONT, hudText } from './BitmapFont.js';
 
 /** Body text style (Fredoka). Text is rasterised at RES so it stays crisp. */
 export function textStyle(size = 24, color = COLORS.text, extra = {}) {
@@ -428,9 +429,9 @@ export class CurrencyBar {
   }
 }
 
-/** Rising, fading floating label ("+25", "NEW!"). */
+/** Rising, fading floating label ("+25", "NEW!"). Bitmap text: no hitch. */
 export function floatText(scene, x, y, str, color = '#ffe066', size = 30) {
-  const t = outlinedText(scene, x, y, str, size, color).setDepth(2000);
+  const t = (scene.cache.bitmapFont.exists(HUD_FONT) ? hudText(scene, x, y, str, size, color) : outlinedText(scene, x, y, str, size, color)).setDepth(21000);
   scene.tweens.add({ targets: t, y: y - 70, alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
   return t;
 }

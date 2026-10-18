@@ -33,6 +33,7 @@ import { placeBillboard } from '../entities/World3D.js';
 import { pointerPos, setupCamera } from '../ui/Display.js';
 import { makeButton, makeIconButton, makeProgressBar, Modal, outlinedText, textStyle, displayStyle, floatText } from '../ui/UIKit.js';
 import { uiImage, buttonKey, vignetteKey } from '../ui/Skin.js';
+import { hudText } from '../ui/BitmapFont.js';
 import { CATALOG, RARITY_TIERS } from '../config/GachaDropTable.js';
 import { HEAD_START, SCORE_BOOSTER_BONUS, BOOST_ITEMS, STAGES } from '../config/ProgressionConfig.js';
 import { speedAt, stageIndexAt, stageAt, ZoneDirector } from '../systems/RunDirector.js';
@@ -44,7 +45,6 @@ const SWIPE = 26; // logical px for a swipe
 const TAP_MS = 280;
 const ROAD_HALF = 3.5; // metres from centre to the outer kerb edge
 const STRIPE_M = 3.2;
-const SLABS = 60;
 
 const GRASS = [0x6ad86f, 0x55c75f];
 // Candy-coloured road sections (peach, pink, mint, lavender) and rainbow kerbs.
@@ -228,7 +228,8 @@ export class RunnerScene extends Phaser.Scene {
     this.bgMountains = this.add.tileSprite(0, 0, WIDTH, 300, 'bg_mountains').setOrigin(0.5, 1).setDepth(0.3);
     this.bgHills = this.add.tileSprite(0, 0, WIDTH, 260, 'bg_hills').setOrigin(0.5, 1).setDepth(0.4);
     this.bgForest = this.add.tileSprite(0, 0, WIDTH * 2, 400, 'bg_canopy').setOrigin(0.5, 1).setDepth(0.5);
-    this.tint = this.add.rectangle(0, 0, WIDTH, HEIGHT, 0xff7b54, 0).setOrigin(0).setDepth(19000);
+    this.haze = this.add.image(0, 0, 'fx_haze').setOrigin(0.5, 0.5).setDepth(2.5);
+    this.tint = this.add.rectangle(0, 0, WIDTH, HEIGHT, 0xff7b54, 0).setOrigin(0).setDepth(19000).setVisible(false);
     this.layoutBackground();
   }
 
@@ -241,6 +242,7 @@ export class RunnerScene extends Phaser.Scene {
     this.bgMountains.setPosition(WIDTH / 2, h + 6).setSize(WIDTH / s, 300).setScale(s);
     this.bgHills.setPosition(WIDTH / 2, h + 8).setSize(WIDTH / s, 260).setScale(s * 0.8);
     this.bgForest.setPosition(WIDTH / 2, h + 10).setSize((WIDTH / 0.42) * 1.1, 400).setScale(0.42);
+    this.haze.setPosition(WIDTH / 2, h + 4).setDisplaySize(WIDTH, Math.max(70, HEIGHT * 0.09));
     this.tint.setSize(WIDTH, HEIGHT);
   }
 
@@ -365,12 +367,12 @@ export class RunnerScene extends Phaser.Scene {
     const h = this.hud;
     h.vignette = uiImage(this, 0, 0, vignetteKey(this)).setDepth(hudDepth - 1).setAlpha(0.8);
     h.scoreBg = this.add.graphics().setDepth(hudDepth);
-    h.score = this.add.text(0, 0, '0', displayStyle(48, '#ffffff', { stroke: '#3d2a52', strokeThickness: 9 })).setDepth(hudDepth + 1);
-    h.score.setShadow(0, 4, '#3d2a52', 0, true, false);
-    h.mult = outlinedText(this, 0, 0, 'x1', 30, '#ffe066').setDepth(hudDepth + 1).setOrigin(0, 0.5);
-    h.dist = this.add.text(0, 0, '0 m', textStyle(20, '#ffffff', { stroke: '#3d2a52', strokeThickness: 4 })).setDepth(hudDepth + 1);
+    // Bitmap text: updating these every frame costs nothing (no texture re-upload).
+    h.score = hudText(this, 0, 0, '0', 46).setOrigin(0, 0).setDepth(hudDepth + 1);
+    h.mult = hudText(this, 0, 0, 'x1', 30, '#ffe066').setDepth(hudDepth + 1).setOrigin(0, 0.5);
+    h.dist = hudText(this, 0, 0, '0 m', 19).setOrigin(0, 0).setDepth(hudDepth + 1);
     h.coinIcon = this.add.image(0, 0, 'coin').setScale(0.85).setDepth(hudDepth + 1);
-    h.coins = this.add.text(0, 0, '0', displayStyle(36, '#ffe066', { stroke: '#3d2a52', strokeThickness: 7 })).setOrigin(1, 0.5).setDepth(hudDepth + 1);
+    h.coins = hudText(this, 0, 0, '0', 34, '#ffe066').setOrigin(1, 0.5).setDepth(hudDepth + 1);
 
     // Skin rarity bonus badge ("LEGENDARY x1.5")
     const tier = RARITY_TIERS[CATALOG[Services.save.data.equipped.baseDoll]?.rarity];
@@ -380,7 +382,7 @@ export class RunnerScene extends Phaser.Scene {
       h.skin.add([uiImage(this, -6, -4, buttonKey(this, 190, 36, skinName, false)), outlinedText(this, 95, 16, `${tier.label.toUpperCase()} x${this.skinMult}`, 19)]);
     }
     h.letters = WORD_HUNT.WORD.split('').map((ch) => this.add.image(0, 0, `letter_${ch}`).setScale(0.36).setDepth(hudDepth + 1));
-    h.combo = outlinedText(this, 0, 0, '', 28, '#6ee7a8').setAlpha(0).setDepth(hudDepth + 1);
+    h.combo = hudText(this, 0, 0, '', 28, '#6ee7a8').setAlpha(0).setDepth(hudDepth + 1);
 
     // Item slot (tap to fire the held item)
     h.item = this.add.container(0, 0).setDepth(hudDepth + 2);
@@ -401,7 +403,7 @@ export class RunnerScene extends Phaser.Scene {
     // Active zone badge
     h.zone = this.add.container(0, 0).setDepth(hudDepth + 1).setVisible(false);
     h.zoneBg = this.add.graphics();
-    h.zoneText = outlinedText(this, 0, 0, '', 22, '#ffffff');
+    h.zoneText = hudText(this, 0, 0, '', 21);
     h.zone.add([h.zoneBg, h.zoneText]);
     this.layoutHud();
     this.refreshLetters();
@@ -414,9 +416,9 @@ export class RunnerScene extends Phaser.Scene {
     h.scoreBg.clear();
     h.scoreBg.fillStyle(0x000000, 0.3).fillRoundedRect(14, 12, 300, 96, 26);
     h.scoreBg.fillStyle(0x000000, 0.3).fillRoundedRect(W - 230, 12, 140, 60, 30);
-    h.score.setPosition(30, 14);
+    h.score.setPosition(28, 14);
     h.mult.setPosition(232, 42);
-    h.dist.setPosition(32, 76);
+    h.dist.setPosition(30, 74);
     h.coinIcon.setPosition(W - 200, 42);
     h.coins.setPosition(W - 104, 42);
     h.pause.setPosition(W - 46, 44);
@@ -639,6 +641,7 @@ export class RunnerScene extends Phaser.Scene {
     this.renderWorld(dz, dt);
 
     if (this.isOver || !this.started) return;
+    this.checkQuality();
     this.updateHeadStart();
     this.updateZone(dt);
     this.updateStage();
@@ -650,6 +653,24 @@ export class RunnerScene extends Phaser.Scene {
     this.updateMultiplierBadge();
     if (this.combo && this.gameTime - this.lastCoinAt > RUNNER.COMBO_WINDOW_MS) this.endCombo();
 
+  }
+
+  /**
+   * Auto quality: if the device can't hold a smooth frame rate after a few
+   * seconds, trim the optional effects instead of stuttering.
+   */
+  checkQuality() {
+    if (this.qualityChecked || this.gameTime < 4000) return;
+    this.qualityChecked = true;
+    if (this.game.loop.actualFps >= 48) return;
+    this.lowFx = true;
+    for (let i = this.scenery.length - 1; i >= 0; i -= 2) {
+      this.scenery[i].img.destroy();
+      this.scenery.splice(i, 1);
+    }
+    this.warp.frequency = 40;
+    this.stars.frequency = 160;
+    this.player.lowFx = true;
   }
 
   // -------------------------------------------------------------------------- stages & zones
@@ -691,12 +712,15 @@ export class RunnerScene extends Phaser.Scene {
     }
     const target = this.zone ? this.zone.def.tintAlpha : 0;
     this.tintAlpha += (target - this.tintAlpha) * Math.min(1, dt * 2);
-    this.tint.setAlpha(1).setFillStyle(this.tint.fillColor, this.tintAlpha);
+    this.tint.setFillStyle(this.tint.fillColor, this.tintAlpha).setVisible(this.tintAlpha > 0.004);
     const h = this.hud;
     h.zone.setVisible(Boolean(this.zone));
     if (this.zone) {
       const left = Math.max(0, Math.ceil(this.zone.end - this.distance));
-      h.zoneText.setText(`${this.zone.def.name} · ${left} m`);
+      if (left !== this._zoneLeft) {
+        this._zoneLeft = left;
+        h.zoneText.setText(`${this.zone.def.name} · ${left} m`);
+      }
     }
   }
 
@@ -827,52 +851,60 @@ export class RunnerScene extends Phaser.Scene {
     this.player.render(this);
   }
 
-  /** Paints the striped road, rainbow kerbs, lane dashes and grass. */
+  /**
+   * Paints the striped road, rainbow kerbs, lane dashes and grass.
+   * Segment edges sit exactly on the track's stripe boundaries, so stripes
+   * glide continuously toward the camera instead of snapping between fixed
+   * slabs. Far stripes blend into one colour (no shimmering at the horizon).
+   */
   drawRoad() {
     const g = this.roadG;
     g.clear();
     const zNear = 0.9;
     const zFar = this.drawDistance;
     const v = this.view;
-    let prev = null;
-    for (let i = 0; i <= SLABS; i++) {
-      const z = zNear * Math.pow(zFar / zNear, i / SLABS);
-      const curve = this.curveOffset(z);
+    const edge = (z) => {
       const s = v.f / z;
-      const cur = {
-        z,
-        y: v.horizonY + v.camH * s,
-        cx: v.cx + (curve - this.camX) * s,
-        s
+      return { z, y: v.horizonY + v.camH * s, cx: v.cx + (this.curveOffset(z) - this.camX) * s, s };
+    };
+    let prev = edge(zNear);
+    let k = Math.floor((this.distance + zNear) / STRIPE_M);
+    while (prev.z < zFar) {
+      const zEnd = Math.min(zFar, (k + 1) * STRIPE_M - this.distance);
+      const cur = edge(Math.max(zEnd, prev.z + 0.05));
+      const zMid = (prev.z + cur.z) / 2;
+      const t = zMid / zFar;
+      const fog = Math.min(1, Math.pow(t, 1.2)) * 0.8;
+      const blend = Math.min(1, Math.max(0, (t - 0.35) / 0.45)); // stripe contrast fades with distance
+      const top = cur.y;
+      const bottom = prev.y + 1;
+      const pick = (pair) => lerpColor(lerpColor(pair[k & 1], lerpColor(pair[0], pair[1], 0.5), blend), HAZE, fog);
+      g.fillStyle(pick(GRASS), 1);
+      g.fillRect(0, top, WIDTH, bottom - top);
+      const quad = (x0, x1, color, alpha = 1) => {
+        g.fillStyle(color, alpha);
+        const ax = prev.cx + x0 * prev.s;
+        const bx = prev.cx + x1 * prev.s;
+        const cx2 = cur.cx + x1 * cur.s;
+        const dx = cur.cx + x0 * cur.s;
+        g.fillTriangle(ax, bottom, bx, bottom, cx2, top);
+        g.fillTriangle(ax, bottom, cx2, top, dx, top);
       };
-      if (prev) {
-        const stripe = Math.floor((this.distance + prev.z) / STRIPE_M);
-        const fog = Math.min(1, Math.pow(prev.z / zFar, 1.2)) * 0.8;
-        const top = cur.y;
-        const bottom = prev.y + 1;
-        g.fillStyle(lerpColor(GRASS[stripe & 1], HAZE, fog), 1);
-        g.fillRect(0, top, WIDTH, bottom - top);
-        const quad = (x0, x1, color) => {
-          g.fillStyle(lerpColor(color, HAZE, fog), 1);
-          g.fillPoints(
-            [
-              { x: prev.cx + x0 * prev.s, y: bottom },
-              { x: prev.cx + x1 * prev.s, y: bottom },
-              { x: cur.cx + x1 * cur.s, y: top },
-              { x: cur.cx + x0 * cur.s, y: top }
-            ],
-            true
-          );
-        };
-        quad(-ROAD_HALF, ROAD_HALF, ROADS[Math.floor(stripe / 30) % ROADS.length][stripe & 1]);
-        quad(-ROAD_HALF, -ROAD_HALF + 0.45, KERB[stripe % KERB.length]);
-        quad(ROAD_HALF - 0.45, ROAD_HALF, KERB[(stripe + 3) % KERB.length]);
-        if (stripe % 2 === 0) {
-          quad(-1.12, -0.98, 0xffffff);
-          quad(0.98, 1.12, 0xffffff);
-        }
+      const road = ROADS[Math.floor(k / 30) % ROADS.length];
+      quad(-ROAD_HALF, ROAD_HALF, pick(road));
+      // Soft shading along the kerbs gives the road some volume.
+      const shade = lerpColor(lerpColor(road[1], 0x8a5a6a, 0.18), HAZE, fog);
+      quad(-ROAD_HALF + 0.45, -ROAD_HALF + 0.85, shade, 0.55);
+      quad(ROAD_HALF - 0.85, ROAD_HALF - 0.45, shade, 0.55);
+      quad(-ROAD_HALF, -ROAD_HALF + 0.45, lerpColor(KERB[k % KERB.length], HAZE, fog));
+      quad(ROAD_HALF - 0.45, ROAD_HALF, lerpColor(KERB[(k + 3) % KERB.length], HAZE, fog));
+      if (k % 2 === 0 && t < 0.75) {
+        const a = 1 - Math.max(0, (t - 0.45) / 0.3);
+        quad(-1.12, -0.98, 0xffffff, a * 0.9);
+        quad(0.98, 1.12, 0xffffff, a * 0.9);
       }
       prev = cur;
+      k += 1;
     }
   }
 
@@ -1171,7 +1203,8 @@ export class RunnerScene extends Phaser.Scene {
 
   /** Big bouncy rainbow text in the middle of the screen. */
   popText(text, color = '#ffffff') {
-    const t = outlinedText(this, WIDTH / 2, HEIGHT * (this.view.portrait ? 0.24 : 0.3), text, this.view.portrait ? 52 : 58, color).setDepth(21000).setScale(0.2);
+    const size = Math.min(this.view.portrait ? 52 : 58, (WIDTH - 40) / Math.max(1, text.length * 0.62));
+    const t = hudText(this, WIDTH / 2, HEIGHT * (this.view.portrait ? 0.24 : 0.3), text, size, color).setDepth(21000).setScale(0.2);
     this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, y: t.y - 60, delay: 650, duration: 300, onComplete: () => t.destroy() });
   }
