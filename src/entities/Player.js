@@ -1,107 +1,79 @@
 /**
  * Player.js
- * The runner character: an Arcade-physics sprite driven by a small finite
- * state machine.
+ * The 3D lane runner's character, seen from behind.
  *
- *   RUN  --jump-->  JUMP  --apex-->  FALL  --land-->  RUN
- *    |      ^--------- multi-jump (double for all, triple with Beaver Tail)
- *    \--duck--> SLIDE --release / timer--> RUN
- *   any --hit--> CRASH (terminal)
+ * State machine:
+ *   RUN --jump--> JUMP --apex--> FALL --land--> RUN
+ *    |       ^------ air jumps (double for all, triple with the Beaver Tail)
+ *    \--duck--> DUCK (roll) --timer / release--> RUN
+ *   any --hit--> CRASH (terminal unless revived)
  *
- * The physics sprite itself is invisible: a separate `visual` sprite mirrors
- * its frame and position every frame and carries all the juice (squash &
- * stretch, run lean, flips, star rainbow, boost after-images) without ever
- * changing the hitbox.
- *
- * Feel helpers: coyote time, jump buffering, fast-fall when ducking in the
- * air, and a floaty glide while jump is held (Beaver Tail).
+ * Simulation is in world metres (lane x, height y); RunnerScene projects the
+ * result onto the screen and calls render(). Visual juice (squash & stretch,
+ * lane-change lean, cartwheel on air jumps, star rainbow, after-images) lives
+ * entirely on the sprite and never affects collisions.
  */
 import Phaser from 'phaser';
 import { RUNNER, RES } from '../config/GameConfig.js';
+import { BACK_FRAMES } from '../art/CharacterRenderer.js';
+import { depthFor } from './World3D.js';
 
 export const PlayerState = Object.freeze({
   RUN: 'RUN',
   JUMP: 'JUMP',
-  DOUBLE_JUMP: 'DOUBLE_JUMP',
   FALL: 'FALL',
-  SLIDE: 'SLIDE',
+  DUCK: 'DUCK',
   CRASH: 'CRASH'
 });
 
-const SCALE = 0.8; // on-screen size of a 128 x 176 frame
-const TEX = RES; // the runner sheet is baked at RES for crisp high-DPI art
-// Hitboxes in unscaled frame space (frame is 128 x 176, feet at y = 172).
-const BODY_STAND = { w: 46, h: 104, x: 42, y: 68 };
-const BODY_DUCK = { w: 60, h: 72, x: 40, y: 100 };
-const COYOTE_MS = 90;
+const BACK_TEX_RES = RES * 1.25; // matches bakeBackSheet() in bakePlayerTextures
+const DRAW_HEIGHT_M = 2.05; // on-screen height of a 176 px frame, in metres
 const JUMP_BUFFER_MS = 140;
-const AFTERIMAGES = 5;
+const AFTERIMAGES = 6;
+const RUN_FRAMES = ['run0', 'run1', 'run2', 'run3'];
 
-export class Player extends Phaser.Physics.Arcade.Sprite {
+export class Player {
   /**
-   * @param {Phaser.Scene} scene
-   * @param {number} x
-   * @param {number} groundY  y of the running surface
-   * @param {object} perks    output of computePerks()
+   * @param {Phaser.Scene} scene  RunnerScene (provides gameTime and project())
+   * @param {object} perks        output of computePerks()
    */
-  constructor(scene, x, groundY, perks) {
-    super(scene, x, groundY, 'player_sheet', 'run0');
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
-
+  constructor(scene, perks) {
+    this.scene = scene;
     this.perks = perks;
-    this.groundY = groundY;
     this.state = PlayerState.RUN;
-    this.jumpHeld = false;
+    this.lane = 1;
+    this.x = RUNNER.LANES[1];
+    this.y = 0;
+    this.vy = 0;
     this.jumpsUsed = 0;
-    this.lastGroundedAt = 0;
+    this.jumpHeld = false;
     this.jumpBufferedAt = -Infinity;
-    this.slideBuffered = false;
     this.duckHeld = false;
     this.duckUntil = 0;
-    this.slideDurationMs = RUNNER.SLIDE_DURATION_MS; // RunnerScene scales this with speed
+    this.duckOnLand = false;
     this.shieldCharges = perks.shieldCharges;
     this.invulnerableUntil = 0;
     this.starUntil = 0;
     this.boosting = false;
-    this.wasOnGround = true;
-
-    this.setOrigin(0.5, 1).setScale(SCALE / TEX).setDepth(20).setVisible(false);
-    this.body.setCollideWorldBounds(false);
-    this.applyHitbox(BODY_STAND);
-    this.jumpVelocity = RUNNER.JUMP_VELOCITY * Math.sqrt(perks.jumpMultiplier); // height ∝ v²
-    this.airJumpVelocity = RUNNER.DOUBLE_JUMP_VELOCITY * Math.sqrt(perks.jumpMultiplier);
-    this.play('player_run');
-
-    // ---- visuals (never touch the hitbox)
+    this.runPhase = 0;
     this.squash = { x: 1, y: 1 };
     this.spin = 0;
-    this.shadow = scene.add.ellipse(x, groundY + 3, 74, 16, 0x2a1830, 0.28).setDepth(14);
-    this.afterimages = Array.from({ length: AFTERIMAGES }, () =>
-      scene.add.image(x, groundY, 'player_sheet', 'run0').setOrigin(0.5, 1).setDepth(19).setVisible(false).setTintFill(0xfff1b8)
-    );
+
+    this.shadow = scene.add.image(0, 0, 'fx_shadow').setDepth(5000);
+    this.afterimages = Array.from({ length: AFTERIMAGES }, () => scene.add.image(0, 0, 'player_back', 'run0').setOrigin(0.5, 1).setVisible(false).setDepth(5001));
     this.nextAfterimageAt = 0;
     this.afterimageIndex = 0;
-    this.visual = scene.add.sprite(x, groundY, 'player_sheet', 'run0').setOrigin(0.5, 1).setDepth(20);
-    this.shieldFx = scene.add.image(x, groundY - 60, 'fx_shield').setDepth(21).setScale(SCALE).setVisible(this.shieldCharges > 0);
-    scene.tweens.add({ targets: this.shieldFx, alpha: { from: 0.65, to: 1 }, yoyo: true, repeat: -1, duration: 600 });
-
-    // Sync visuals after Arcade has moved the body this frame.
-    scene.events.on('postupdate', this.syncVisual, this);
+    this.sprite = scene.add.image(0, 0, 'player_back', 'run0').setOrigin(0.5, 1).setDepth(5002);
+    this.shieldFx = scene.add.image(0, 0, 'fx_shield').setDepth(5003).setVisible(this.shieldCharges > 0);
+    scene.tweens.add({ targets: this.shieldFx, alpha: { from: 0.6, to: 1 }, yoyo: true, repeat: -1, duration: 600 });
   }
 
-  applyHitbox(box) {
-    this.body.setSize(box.w * TEX, box.h * TEX, false);
-    this.body.setOffset(box.x * TEX, box.y * TEX);
-  }
-
-  /** Gameplay clock (RunnerScene.gameTime), falling back to the scene clock. */
   get now() {
-    return this.scene.gameTime ?? this.scene.time.now;
+    return this.scene.gameTime;
   }
 
   get isGrounded() {
-    return this.body.blocked.down || this.body.touching.down;
+    return this.y <= 0.0001 && this.vy <= 0;
   }
 
   get isCrashed() {
@@ -112,46 +84,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.perks.maxJumps ?? 2;
   }
 
-  /** Transition helper - single place that changes state & visuals. */
-  setStateTo(next) {
-    if (this.state === next || this.state === PlayerState.CRASH) return;
-    const prev = this.state;
-    this.state = next;
-    if (prev === PlayerState.SLIDE) {
-      this.applyHitbox(BODY_STAND);
-      this.punch(0.85, 1.18, 120);
-    }
-
-    switch (next) {
-      case PlayerState.RUN:
-        this.play('player_run', true);
-        break;
-      case PlayerState.JUMP:
-      case PlayerState.DOUBLE_JUMP:
-        this.anims.stop();
-        this.setFrame('jump');
-        break;
-      case PlayerState.FALL:
-        this.anims.stop();
-        this.setFrame('fall');
-        break;
-      case PlayerState.SLIDE:
-        this.anims.stop();
-        this.setFrame('slide');
-        this.applyHitbox(BODY_DUCK);
-        this.punch(1.15, 0.85, 110);
-        break;
-      case PlayerState.CRASH:
-        this.anims.stop();
-        this.setFrame('crash');
-        break;
-      default:
-        break;
-    }
+  /** Current collision height (metres). */
+  get height() {
+    return this.state === PlayerState.DUCK ? RUNNER.DUCK_HEIGHT : RUNNER.PLAYER_HEIGHT;
   }
 
-  /** Squash & stretch: snap to (sx, sy) then spring back to 1. */
-  punch(sx, sy, duration = 140) {
+  /** True while sliding sideways between lanes. */
+  get isChangingLane() {
+    return Math.abs(RUNNER.LANES[this.lane] - this.x) > 0.25;
+  }
+
+  get hasStar() {
+    return this.now < this.starUntil;
+  }
+
+  /** Squash & stretch: snap to (sx, sy) then spring back. */
+  punch(sx, sy, duration = 130) {
     this.scene.tweens.killTweensOf(this.squash);
     this.squash.x = sx;
     this.squash.y = sy;
@@ -160,72 +108,73 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   // -------------------------------------------------------------------------- input
 
-  /**
-   * Jump request (tap / swipe up / space). Ground jump, then air jumps:
-   * everyone gets a double jump, the Beaver Tail adds a third.
-   */
+  /** Swipe left (-1) / right (+1). Returns false at the edge of the road. */
+  moveLane(dir) {
+    if (this.isCrashed) return false;
+    const next = Phaser.Math.Clamp(this.lane + dir, 0, RUNNER.LANES.length - 1);
+    if (next === this.lane) return false;
+    this.prevLane = this.lane;
+    this.lane = next;
+    this.punch(0.86, 1.1, 90);
+    this.scene.events.emit('player-lane', { dir });
+    return true;
+  }
+
+  /** Snaps back to the previous lane (bumped into the side of a wall). */
+  bounceBack() {
+    if (this.prevLane === undefined) return;
+    this.lane = this.prevLane;
+    this.punch(1.2, 0.8, 120);
+  }
+
+  /** Tap / swipe up. Ground jump, then air jumps (double; triple with Beaver Tail). */
   jump() {
     if (this.isCrashed) return false;
-    const now = this.now;
-    const onGroundish = this.state === PlayerState.RUN || this.state === PlayerState.SLIDE || (now - this.lastGroundedAt <= COYOTE_MS && this.jumpsUsed === 0);
-
-    if (onGroundish) {
-      this.duckHeld = false;
-      this.body.setVelocityY(this.jumpVelocity);
+    if (this.isGrounded || this.state === PlayerState.DUCK) {
+      this.vy = RUNNER.JUMP_VELOCITY * Math.sqrt(this.perks.jumpMultiplier);
+      this.y = 0.001;
       this.jumpsUsed = 1;
-      this.lastGroundedAt = -Infinity;
-      this.setStateTo(PlayerState.JUMP);
+      this.duckHeld = false;
+      this.state = PlayerState.JUMP;
       this.punch(0.78, 1.25, 120);
       this.scene.events.emit('player-jump', { double: false, count: 1 });
       return true;
     }
     if (this.jumpsUsed < this.maxJumps) {
       this.jumpsUsed += 1;
-      this.body.setVelocityY(this.airJumpVelocity);
-      this.slideBuffered = false;
-      this.state = PlayerState.JUMP; // allow DOUBLE_JUMP to re-enter on a triple jump
-      this.setStateTo(PlayerState.DOUBLE_JUMP);
+      this.vy = RUNNER.AIR_JUMP_VELOCITY * Math.sqrt(this.perks.jumpMultiplier);
+      this.duckOnLand = false;
+      this.state = PlayerState.JUMP;
       this.punch(0.8, 1.2, 110);
       this.scene.tweens.killTweensOf(this);
       this.spin = 0;
-      this.scene.tweens.add({ targets: this, spin: -360, duration: 360, ease: 'Cubic.easeOut', onComplete: () => (this.spin = 0) });
+      this.scene.tweens.add({ targets: this, spin: 360 * (this.jumpsUsed % 2 ? -1 : 1), duration: 380, ease: 'Cubic.easeOut', onComplete: () => (this.spin = 0) });
       this.scene.events.emit('player-jump', { double: true, count: this.jumpsUsed });
       return true;
     }
-    // Out of air jumps: remember the press so it fires on landing.
-    this.jumpBufferedAt = now;
+    this.jumpBufferedAt = this.now; // fires on landing
     return false;
   }
 
-  /**
-   * Duck press (left-side hold, swipe down, arrow down). Ducks for at least
-   * `slideDurationMs` and keeps ducking while `held`. In the air it fast-falls
-   * and ducks on landing.
-   */
+  /** Swipe down / hold down: roll under gates. In the air it slams down first. */
   duck(held = false) {
     if (this.isCrashed) return;
     this.duckHeld = held;
-    this.duckUntil = this.now + this.slideDurationMs;
+    this.duckUntil = this.now + RUNNER.ROLL_MS;
     if (this.isGrounded) {
-      if (this.state !== PlayerState.SLIDE) {
-        this.setStateTo(PlayerState.SLIDE);
-        this.scene.events.emit('player-slide');
+      if (this.state !== PlayerState.DUCK) {
+        this.state = PlayerState.DUCK;
+        this.punch(1.2, 0.8, 100);
+        this.scene.events.emit('player-duck');
       }
     } else {
-      this.body.setVelocityY(Math.max(this.body.velocity.y, RUNNER.FAST_FALL_VELOCITY));
-      this.slideBuffered = true;
+      this.vy = Math.min(this.vy, RUNNER.FAST_FALL_VELOCITY);
+      this.duckOnLand = true;
     }
   }
 
-  /** Releasing the duck input ends the duck once the minimum time passed. */
   releaseDuck() {
     this.duckHeld = false;
-    if (!this.isGrounded) this.slideBuffered = false;
-  }
-
-  /** Kept for API compatibility: a one-shot duck. */
-  slide() {
-    this.duck(false);
   }
 
   setJumpHeld(held) {
@@ -234,28 +183,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   // -------------------------------------------------------------------------- damage
 
-  /** True while post-hit invulnerability or a Super Star is active. */
-  isInvulnerable(now = this.now) {
-    return now < this.invulnerableUntil || now < this.starUntil;
-  }
-
-  get hasStar() {
-    return this.now < this.starUntil;
-  }
-
   /**
-   * Called on obstacle contact. Returns 'smash' (star/boost plows through),
-   * 'shield' if the hit was absorbed, 'crash' if the run is over, or
-   * 'ignored' during invulnerability frames.
+   * Obstacle contact. Returns 'smash' (star / boost plows through), 'shield'
+   * if absorbed, 'ignored' during invulnerability, or 'crash'.
    */
   hit() {
     if (this.isCrashed) return 'ignored';
-    const now = this.now;
     if (this.hasStar || this.boosting) return 'smash';
-    if (this.isInvulnerable(now)) return 'ignored';
+    if (this.now < this.invulnerableUntil) return 'ignored';
     if (this.shieldCharges > 0) {
       this.shieldCharges -= 1;
-      this.invulnerableUntil = now + RUNNER.INVULNERABLE_AFTER_SHIELD_MS;
+      this.invulnerableUntil = this.now + RUNNER.INVULNERABLE_AFTER_SHIELD_MS;
       this.shieldFx.setVisible(this.shieldCharges > 0);
       return 'shield';
     }
@@ -269,114 +207,137 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   crash() {
-    this.setStateTo(PlayerState.CRASH);
-    this.body.setVelocity(0, -480);
-    this.body.checkCollision.none = true; // fall through the floor, cartoon style
-    this.scene.tweens.add({ targets: this, spin: 220, duration: 900, ease: 'Quad.easeIn' });
+    this.state = PlayerState.CRASH;
+    this.vy = 7;
+    // Turn round to face the camera, dazed (front-view crash frame).
+    this.sprite.setTexture('player_sheet', 'crash');
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.add({ targets: this, spin: 25, duration: 500, ease: 'Quad.easeOut' });
   }
 
-  /** Brings the runner back after a revive. */
-  revive(groundY) {
+  revive() {
     this.scene.tweens.killTweensOf(this);
     this.state = PlayerState.FALL;
     this.spin = 0;
-    this.body.checkCollision.none = false;
-    this.body.reset(this.x, groundY - 240);
-    this.body.setVelocity(0, 0);
+    this.y = 3;
+    this.vy = 0;
     this.jumpsUsed = 1;
     this.invulnerableUntil = this.now + 2500;
-    this.setFrame('fall');
-    this.visual.setAlpha(1);
+    this.sprite.setTexture('player_back', 'fall');
   }
 
   // -------------------------------------------------------------------------- tick
 
-  /** Per-frame update: gravity modifiers, landing detection, state upkeep. */
-  update(time) {
-    if (this.isCrashed) return;
+  /** Integrates lane movement, gravity and state timers. */
+  update(dt, speed) {
+    const now = this.now;
 
-    const grounded = this.isGrounded;
-    const vy = this.body.velocity.y;
+    // Smooth lane slide (exponential approach so it feels snappy).
+    const target = RUNNER.LANES[this.lane];
+    const k = 1 - Math.exp((-dt * 1000) / (RUNNER.LANE_SWITCH_MS / 3));
+    this.x += (target - this.x) * k;
 
-    // Gravity: base modifier (Space Explorer) and glide (Beaver Tail).
-    let factor = this.perks.gravityMultiplier;
-    if (this.perks.floatyFall && this.jumpHeld && vy > 0 && !grounded) factor *= RUNNER.FLOATY_GRAVITY_FACTOR;
-    this.body.setGravityY(RUNNER.GRAVITY * (factor - 1)); // body gravity is added to world gravity
-
-    if (grounded) {
-      this.lastGroundedAt = time;
-      if (!this.wasOnGround) this.onLand(time);
-      if (this.state === PlayerState.SLIDE && !this.duckHeld && time >= this.duckUntil) this.setStateTo(PlayerState.RUN);
-    } else if (vy > 0 && (this.state === PlayerState.JUMP || this.state === PlayerState.DOUBLE_JUMP || this.state === PlayerState.RUN)) {
-      this.setStateTo(PlayerState.FALL);
+    if (this.isCrashed) {
+      this.vy -= RUNNER.GRAVITY * dt;
+      this.y = Math.max(0, this.y + this.vy * dt);
+      return;
     }
-    this.wasOnGround = grounded;
+
+    if (!this.isGrounded) {
+      let g = RUNNER.GRAVITY * this.perks.gravityMultiplier;
+      if (this.perks.floatyFall && this.jumpHeld && this.vy < 0) g *= RUNNER.FLOATY_GRAVITY_FACTOR;
+      this.vy -= g * dt;
+      this.y += this.vy * dt;
+      if (this.vy < 0 && this.state === PlayerState.JUMP) this.state = PlayerState.FALL;
+      if (this.y <= 0) this.land();
+    } else if (this.state === PlayerState.DUCK && !this.duckHeld && now >= this.duckUntil) {
+      this.state = PlayerState.RUN;
+      this.punch(0.88, 1.12, 100);
+    }
+
+    // Run cycle speed follows the world speed.
+    if (this.state === PlayerState.RUN) this.runPhase += dt * (6 + speed * 0.32);
   }
 
-  onLand(time) {
+  land() {
+    this.y = 0;
+    this.vy = 0;
     this.jumpsUsed = 0;
     this.spin = 0;
     this.punch(1.3, 0.72, 110);
     this.scene.events.emit('player-land');
-    if (this.slideBuffered || this.duckHeld) {
-      this.slideBuffered = false;
-      this.duckUntil = Math.max(this.duckUntil, time + this.slideDurationMs * 0.6);
-      this.setStateTo(PlayerState.SLIDE);
-      this.scene.events.emit('player-slide');
+    if (this.duckOnLand || this.duckHeld) {
+      this.duckOnLand = false;
+      this.state = PlayerState.DUCK;
+      this.duckUntil = Math.max(this.duckUntil, this.now + RUNNER.ROLL_MS * 0.7);
+      this.scene.events.emit('player-duck');
       return;
     }
-    this.setStateTo(PlayerState.RUN);
-    if (time - this.jumpBufferedAt <= JUMP_BUFFER_MS) {
+    this.state = PlayerState.RUN;
+    if (this.now - this.jumpBufferedAt <= JUMP_BUFFER_MS) {
       this.jumpBufferedAt = -Infinity;
       this.jump();
     }
   }
 
-  /** Mirrors the physics sprite onto the visual sprite with all the juice. */
-  syncVisual() {
-    if (!this.visual?.active) return;
-    const v = this.visual;
+  /** Projects the runner onto the screen using the scene's camera. */
+  render(scene) {
+    const z = RUNNER.PLAYER_Z;
+    const feet = scene.project(this.x, this.y, z);
+    const ground = scene.project(this.x, 0, z);
     const now = this.now;
-    const base = SCALE / TEX;
-    v.setFrame(this.frame.name);
-    v.setPosition(this.x, this.y);
-    v.setScale(base * this.squash.x, base * this.squash.y);
-    const lean = this.state === PlayerState.RUN ? 5 : this.state === PlayerState.FALL ? 8 : 0;
-    v.setAngle(lean + this.spin);
 
-    // Super Star: cycle rainbow tints. Invulnerability: flicker.
-    if (this.hasStar) {
-      const hue = (now / 300) % 1;
-      v.setTint(Phaser.Display.Color.HSVToRGB(hue, 0.55, 1).color);
-    } else {
-      v.clearTint();
+    if (!this.isCrashed) {
+      let frame;
+      if (this.state === PlayerState.DUCK) frame = 'duck';
+      else if (this.state === PlayerState.JUMP) frame = 'jump';
+      else if (this.state === PlayerState.FALL) frame = 'fall';
+      else frame = RUN_FRAMES[Math.floor(this.runPhase) % RUN_FRAMES.length];
+      if (BACK_FRAMES.includes(frame)) this.sprite.setFrame(frame);
     }
-    v.setAlpha(!this.hasStar && now < this.invulnerableUntil ? (Math.floor(now / 80) % 2 ? 0.35 : 1) : 1);
 
-    // Boost/star after-images
+    const texRes = this.isCrashed ? RES : BACK_TEX_RES;
+    const base = (DRAW_HEIGHT_M * feet.s) / (176 * texRes);
+    this.sprite.setPosition(feet.x, feet.y);
+    this.sprite.setScale(base * this.squash.x, base * this.squash.y);
+    const lean = Phaser.Math.Clamp((RUNNER.LANES[this.lane] - this.x) * 9, -16, 16);
+    this.sprite.setAngle(lean + this.spin);
+
+    if (this.hasStar) this.sprite.setTint(Phaser.Display.Color.HSVToRGB((now / 280) % 1, 0.55, 1).color);
+    else this.sprite.clearTint();
+    this.sprite.setAlpha(!this.hasStar && now < this.invulnerableUntil ? (Math.floor(now / 80) % 2 ? 0.35 : 1) : 1);
+
+    // Rainbow / boost after-images trail behind (toward the camera).
     if ((this.boosting || this.hasStar) && now > this.nextAfterimageAt && !this.isCrashed) {
-      this.nextAfterimageAt = now + 45;
+      this.nextAfterimageAt = now + 40;
       const ghost = this.afterimages[this.afterimageIndex++ % AFTERIMAGES];
       this.scene.tweens.killTweensOf(ghost);
-      ghost.setFrame(this.frame.name).setPosition(v.x, v.y).setScale(v.scaleX, v.scaleY).setAngle(v.angle).setVisible(true).setAlpha(0.45);
-      ghost.setTintFill(this.hasStar ? Phaser.Display.Color.HSVToRGB((now / 300) % 1, 0.7, 1).color : 0xfff1b8);
-      this.scene.tweens.add({ targets: ghost, alpha: 0, x: ghost.x - 60, duration: 260, onComplete: () => ghost.setVisible(false) });
+      ghost
+        .setTexture(this.sprite.texture.key, this.sprite.frame.name)
+        .setPosition(this.sprite.x, this.sprite.y)
+        .setScale(this.sprite.scaleX, this.sprite.scaleY)
+        .setAngle(this.sprite.angle)
+        .setVisible(true)
+        .setAlpha(0.5)
+        .setTintFill(Phaser.Display.Color.HSVToRGB((now / 200) % 1, 0.7, 1).color);
+      this.scene.tweens.add({ targets: ghost, alpha: 0, scaleX: ghost.scaleX * 1.25, scaleY: ghost.scaleY * 1.25, y: ghost.y + 30, duration: 300, onComplete: () => ghost.setVisible(false) });
     }
 
-    // Ground shadow shrinks as you rise; hidden over pits / after a crash.
-    const height = Math.max(0, this.groundY - this.y);
-    const s = Phaser.Math.Clamp(1 - height / 320, 0.25, 1);
-    this.shadow.setPosition(this.x, this.groundY + 3).setScale(s, s).setAlpha(this.isCrashed || this.y > this.groundY + 6 ? 0 : 0.28 * s + 0.05);
-
-    this.shieldFx.setPosition(v.x, v.y - 62);
+    const lift = Phaser.Math.Clamp(1 - this.y / 3, 0.35, 1);
+    const shadowScale = (2.1 * ground.s * lift) / 128;
+    this.shadow.setPosition(ground.x, ground.y).setScale(shadowScale, shadowScale).setAlpha(this.isCrashed ? 0.3 : 0.6 * lift);
+    const d = depthFor(z);
+    this.shadow.setDepth(d + 0.1);
+    this.sprite.setDepth(d + 0.3);
+    this.shieldFx.setDepth(d + 0.4);
+    this.afterimages.forEach((a) => a.setDepth(d + 0.2));
+    this.shieldFx.setPosition(feet.x, feet.y - DRAW_HEIGHT_M * feet.s * 0.45).setScale((2.1 * feet.s) / 150);
   }
 
-  destroy(fromScene) {
-    this.scene?.events.off('postupdate', this.syncVisual, this);
-    this.shieldFx?.destroy();
-    this.visual?.destroy();
-    this.shadow?.destroy();
-    this.afterimages?.forEach((a) => a.destroy());
-    super.destroy(fromScene);
+  destroy() {
+    this.sprite.destroy();
+    this.shadow.destroy();
+    this.shieldFx.destroy();
+    this.afterimages.forEach((a) => a.destroy());
   }
 }

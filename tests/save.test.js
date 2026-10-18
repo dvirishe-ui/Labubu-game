@@ -58,7 +58,7 @@ describe('PerkCalculator', () => {
     expect(p.doubleJump).toBe(true);
     expect(p.maxJumps).toBe(3);
     expect(p.floatyFall).toBe(true);
-    expect(p.attractRadius).toBe(40 + 150);
+    expect(p.attractRadius).toBeCloseTo(1.2 + 3);
     expect(p.shieldCharges).toBe(1);
     expect(p.coinMultiplier).toBeCloseTo(1.25);
   });

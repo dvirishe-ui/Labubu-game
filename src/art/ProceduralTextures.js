@@ -1152,6 +1152,333 @@ function makeKartExtras(scene) {
   });
 }
 
+// ---------------------------------------------------------------------------- 3D lane runner
+
+function makeRunner3D(scene) {
+  // Vertical sky gradient (stretched to any screen size) and a big sun.
+  canvasTexture(scene, 'sky3d', 8, 512, (ctx, w, h) => {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#2f8cff');
+    g.addColorStop(0.5, '#7fd0ff');
+    g.addColorStop(0.85, '#ffd8ee');
+    g.addColorStop(1, '#ffe7b3');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+  canvasTexture(scene, 'sun', 300, 300, (ctx) => {
+    const g = ctx.createRadialGradient(150, 150, 10, 150, 150, 150);
+    g.addColorStop(0, 'rgba(255,255,240,1)');
+    g.addColorStop(0.25, 'rgba(255,240,170,0.95)');
+    g.addColorStop(0.55, 'rgba(255,220,150,0.35)');
+    g.addColorStop(1, 'rgba(255,220,150,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 300, 300);
+  });
+  canvasTexture(scene, 'fx_shadow', 128, 40, (ctx) => {
+    const g = ctx.createRadialGradient(64, 20, 2, 64, 20, 62);
+    g.addColorStop(0, 'rgba(30,10,40,0.55)');
+    g.addColorStop(1, 'rgba(30,10,40,0)');
+    ctx.fillStyle = g;
+    ctx.save();
+    ctx.scale(1, 40 / 128);
+    ctx.beginPath();
+    ctx.arc(64, 64, 64, 0, Math.PI * 2);
+    ctx.restore();
+    ctx.fill();
+  });
+
+  // Duck-under gate: two posts and a mossy log bar (bar bottom = clearance line).
+  canvasTexture(scene, 'obs_gate', 300, 290, (ctx) => {
+    const post = (x) => {
+      rr(ctx, x - 14, 30, 28, 258, 10);
+      ctx.fillStyle = '#8a5531';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(x - 8, 36, 6, 240);
+    };
+    post(22);
+    post(278);
+    rr(ctx, 4, 48, 292, 88, 40);
+    const g = ctx.createLinearGradient(0, 48, 0, 136);
+    g.addColorStop(0, '#b0743f');
+    g.addColorStop(1, '#6b4226');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(40,20,10,0.35)';
+    ctx.lineWidth = 2;
+    for (const y of [70, 92, 114]) {
+      ctx.beginPath();
+      ctx.moveTo(40, y);
+      ctx.lineTo(260, y + 2);
+      ctx.stroke();
+    }
+    // moss + hanging leaves + a warning stripe
+    ctx.fillStyle = '#5fbf4a';
+    ctx.beginPath();
+    ctx.ellipse(150, 50, 120, 14, 0, Math.PI, 0);
+    ctx.fill();
+    for (let i = 0; i < 14; i++) {
+      ctx.save();
+      ctx.translate(24 + i * 19, 138 + (i % 2) * 6);
+      ctx.rotate(0.3 - (i % 3) * 0.3);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 13, 0, 0, Math.PI * 2);
+      ctx.fillStyle = i % 2 ? '#4f9a4a' : '#6fcf5a';
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#ffd23f';
+    rr(ctx, 110, 80, 80, 26, 10);
+    ctx.fill();
+    ctx.font = 'bold 22px Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#3d2a52';
+    ctx.fillText('▼ ▼', 150, 94);
+  });
+
+  // Wall you must dodge around: a giant toadstool house.
+  canvasTexture(scene, 'obs_tower', 270, 410, (ctx) => {
+    rr(ctx, 70, 170, 130, 236, 30);
+    const sg = ctx.createLinearGradient(70, 0, 200, 0);
+    sg.addColorStop(0, '#fff4e6');
+    sg.addColorStop(1, '#e8d2b6');
+    ctx.fillStyle = sg;
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    rr(ctx, 112, 300, 46, 106, 22);
+    ctx.fillStyle = '#8a5531';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.arc(148, 355, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(135, 230, 20, 0, Math.PI * 2);
+    ctx.fillStyle = '#8fd3ff';
+    ctx.fill();
+    ctx.stroke();
+    // cap
+    ctx.beginPath();
+    ctx.moveTo(6, 196);
+    ctx.bezierCurveTo(10, 20, 260, 20, 264, 196);
+    ctx.closePath();
+    const cg = ctx.createLinearGradient(0, 30, 0, 196);
+    cg.addColorStop(0, '#ff6b81');
+    cg.addColorStop(1, '#d81e3d');
+    ctx.fillStyle = cg;
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (const [x, y, r] of [
+      [70, 120, 20],
+      [140, 70, 24],
+      [205, 125, 18],
+      [120, 160, 12],
+      [230, 175, 10],
+      [40, 175, 10]
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(90, 70, 40, 16, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // ---- roadside scenery
+  canvasTexture(scene, 'sc_pine', 200, 330, (ctx) => {
+    ctx.fillStyle = '#6b4226';
+    ctx.fillRect(88, 250, 24, 80);
+    const tiers = [
+      [250, 96, '#2f8a57', '#45b06a'],
+      [190, 80, '#2f8a57', '#45b06a'],
+      [130, 62, '#2f8a57', '#4fc077']
+    ];
+    for (const [y, r, dark, light] of tiers) {
+      ctx.beginPath();
+      ctx.moveTo(100 - r, y);
+      ctx.lineTo(100, y - r * 1.5);
+      ctx.lineTo(100 + r, y);
+      ctx.closePath();
+      ctx.fillStyle = dark;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(100 - r, y);
+      ctx.lineTo(100, y - r * 1.5);
+      ctx.lineTo(100 - r * 0.15, y);
+      ctx.closePath();
+      ctx.fillStyle = light;
+      ctx.fill();
+    }
+  });
+  canvasTexture(scene, 'sc_oak', 270, 320, (ctx) => {
+    ctx.fillStyle = '#6b4226';
+    ctx.fillRect(120, 200, 30, 120);
+    const blobs = [
+      [135, 140, 90],
+      [70, 170, 60],
+      [200, 170, 62],
+      [135, 70, 64]
+    ];
+    ctx.fillStyle = '#2c8f4c';
+    for (const [x, y, r] of blobs) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#4cc46e';
+    for (const [x, y, r] of blobs) {
+      ctx.beginPath();
+      ctx.arc(x - r * 0.18, y - r * 0.2, r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#ff5a6e';
+    for (const [x, y] of [
+      [90, 120],
+      [170, 100],
+      [150, 180],
+      [60, 190],
+      [210, 160]
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  canvasTexture(scene, 'sc_lolli', 130, 300, (ctx) => {
+    ctx.fillStyle = '#fff4e6';
+    ctx.fillRect(58, 120, 14, 180);
+    ctx.save();
+    ctx.translate(65, 70);
+    const colors = ['#ff5a8a', '#ffd23f', '#59b8ff', '#6ee7a8', '#b07cff'];
+    for (let i = 0; i < 10; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 60, (i / 10) * Math.PI * 2, ((i + 1) / 10) * Math.PI * 2);
+      ctx.closePath();
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, 60, 0, Math.PI * 2);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.arc(-20, -20, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+  canvasTexture(scene, 'sc_shroom', 170, 170, (ctx) => {
+    rr(ctx, 60, 80, 50, 86, 20);
+    ctx.fillStyle = '#fff4e6';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(6, 96);
+    ctx.bezierCurveTo(10, 4, 160, 4, 164, 96);
+    ctx.closePath();
+    ctx.fillStyle = '#b07cff';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (const [x, y, r] of [
+      [50, 56, 12],
+      [100, 36, 14],
+      [130, 70, 10]
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  canvasTexture(scene, 'sc_flower', 70, 90, (ctx) => {
+    ctx.strokeStyle = '#3f9b3a';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(35, 90);
+    ctx.lineTo(35, 40);
+    ctx.stroke();
+    const c = ['#ff5a8a', '#ffd23f', '#59b8ff', '#ffffff'][Math.floor(Math.random() * 4)];
+    ctx.fillStyle = c;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(35 + Math.cos(a) * 13, 32 + Math.sin(a) * 13, 11, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#ffb000';
+    ctx.beginPath();
+    ctx.arc(35, 32, 9, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  canvasTexture(scene, 'sc_bush', 180, 110, (ctx) => {
+    ctx.fillStyle = '#2f9a4a';
+    for (const [x, y, r] of [
+      [50, 70, 40],
+      [95, 55, 48],
+      [140, 72, 38]
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#56cc6a';
+    for (const [x, y, r] of [
+      [44, 62, 26],
+      [88, 44, 30],
+      [134, 64, 22]
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillRect(10, 90, 160, 20);
+  });
+
+  // ---- L-A-B-U-B-U bubble letters (word hunt)
+  for (const ch of new Set('LABUBU')) {
+    canvasTexture(scene, `letter_${ch}`, 110, 110, (ctx) => {
+      const glow = ctx.createRadialGradient(55, 55, 10, 55, 55, 55);
+      glow.addColorStop(0, 'rgba(255,255,255,0.9)');
+      glow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 110, 110);
+      ctx.font = 'bold 84px Trebuchet MS, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = '#3d2a52';
+      ctx.strokeText(ch, 55, 60);
+      const g = ctx.createLinearGradient(0, 20, 0, 100);
+      g.addColorStop(0, '#ff6b9a');
+      g.addColorStop(0.33, '#ffd166');
+      g.addColorStop(0.66, '#6ee7a8');
+      g.addColorStop(1, '#59b8ff');
+      ctx.fillStyle = g;
+      ctx.fillText(ch, 55, 60);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.strokeText(ch, 55, 60);
+    });
+  }
+}
+
 /** Generates every non-character texture. Called once from BootScene. */
 export function generateAllTextures(scene) {
   makePickups(scene);
@@ -1160,4 +1487,5 @@ export function generateAllTextures(scene) {
   makeBlindBox(scene);
   makeBackgrounds(scene);
   makeKartExtras(scene);
+  makeRunner3D(scene);
 }

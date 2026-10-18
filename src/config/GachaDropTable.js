@@ -90,7 +90,7 @@ export const CATALOG = {
     type: 'outfit',
     rarity: 'common',
     description: 'Red plaid with magnetic buttons. Coins can’t resist it.',
-    perks: { magnetBonus: 150 }
+    perks: { magnetBonus: 3 } // +3 m coin reach
   },
   beaver_cap: {
     id: 'beaver_cap',
@@ -197,7 +197,7 @@ export function describePerks(perks = {}) {
   const lines = [];
   if (perks.extraJump) lines.push('Triple jump');
   if (perks.floatyFall) lines.push('Glide: -35% gravity while holding jump');
-  if (perks.magnetBonus) lines.push(`Coin magnet +${perks.magnetBonus}px`);
+  if (perks.magnetBonus) lines.push(`Coin magnet +${perks.magnetBonus} m reach`);
   if (perks.shield) lines.push(`${perks.shield}-hit shield per run`);
   if (perks.coinMultiplier) lines.push(`+${Math.round(perks.coinMultiplier * 100)}% coin value`);
   if (perks.jumpBoost) lines.push(`+${Math.round(perks.jumpBoost * 100)}% jump height`);

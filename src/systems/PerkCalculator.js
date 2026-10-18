@@ -19,7 +19,7 @@ export function computePerks(equipped = {}) {
     doubleJump: true, // everyone can double jump (double tap)
     maxJumps: 2,
     floatyFall: false,
-    attractRadius: RUNNER.BASE_ATTRACT_RADIUS,
+    attractRadius: RUNNER.ATTRACT_DIST, // metres
     shieldCharges: 0,
     coinMultiplier: 1,
     jumpMultiplier: 1,

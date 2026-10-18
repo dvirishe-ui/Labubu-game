@@ -212,8 +212,11 @@ export class Modal {
     }
     this.root.add(this.panel);
 
-    this.panel.setScale(0.6).setAlpha(0);
-    scene.tweens.add({ targets: this.panel, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut' });
+    // Shrink to fit narrow (portrait) screens; content keeps its own coordinates.
+    this.fit = Math.min(1, (WIDTH - 24) / width, (HEIGHT - 70) / (height + 40));
+    this.panel.fitScale = this.fit;
+    this.panel.setScale(0.6 * this.fit).setAlpha(0);
+    scene.tweens.add({ targets: this.panel, scale: this.fit, alpha: 1, duration: 260, ease: 'Back.easeOut' });
     this.blocker.setAlpha(0);
     scene.tweens.add({ targets: this.blocker, alpha: 1, duration: 200 });
   }
@@ -229,7 +232,7 @@ export class Modal {
     this.closing = true;
     this.scene.tweens.add({
       targets: this.panel,
-      scale: 0.7,
+      scale: 0.7 * this.fit,
       alpha: 0,
       duration: 160,
       ease: 'Quad.easeIn',
@@ -257,16 +260,20 @@ export class ScrollList {
     // the modal's pop-in scale tween) to get the final on-screen rectangle.
     let wx = x;
     let wy = y;
+    let ws = 1;
     for (let p = parent; p; p = p.parentContainer) {
-      wx += p.x;
-      wy += p.y;
+      const sc = p.fitScale ?? p.scaleX;
+      wx = p.x + wx * sc;
+      wy = p.y + wy * sc;
+      ws *= sc;
     }
     const shape = scene.make.graphics({}, false);
     shape.fillStyle(0xffffff);
-    shape.fillRect(wx, wy, w, h);
+    shape.fillRect(wx, wy, w * ws, h * ws);
     this.inner.setMask(shape.createGeometryMask());
     this.maskShape = shape;
     this.top = y;
+    this.contentScale = ws;
 
     const zone = scene.add.zone(x, y, w, h).setOrigin(0).setInteractive();
     parent.add(zone);
@@ -281,7 +288,7 @@ export class ScrollList {
     });
     this._onMove = (p) => {
       if (!this.dragging || !p.isDown) return;
-      this.setScroll(startScroll + (startY - p.y / RES));
+      this.setScroll(startScroll + (startY - p.y / RES) / this.contentScale);
     };
     this._onUp = () => (this.dragging = false);
     scene.input.on('pointermove', this._onMove);
@@ -312,7 +319,7 @@ export class ScrollList {
  * animates count changes.
  */
 export class CurrencyBar {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, { compact = WIDTH < 1000 } = {}) {
     this.scene = scene;
     this.root = scene.add.container(x, y).setDepth(50);
     this.values = {};
@@ -321,13 +328,14 @@ export class CurrencyBar {
       ['blindBoxTickets', 'ticket', 0.6],
       ['goldenKeys', 'key', 0.65]
     ];
+    const pillW = compact ? 148 : 170;
     defs.forEach(([key, tex, scale], i) => {
-      const cx = i * 190;
+      const cx = i * (pillW + (compact ? 10 : 20));
       const g = scene.add.graphics();
       g.fillStyle(0x000000, 0.25);
-      g.fillRoundedRect(cx, 0, 170, 46, 23);
+      g.fillRoundedRect(cx, 0, pillW, 46, 23);
       g.lineStyle(3, 0xffffff, 0.5);
-      g.strokeRoundedRect(cx, 0, 170, 46, 23);
+      g.strokeRoundedRect(cx, 0, pillW, 46, 23);
       const icon = scene.add.image(cx + 26, 23, tex).setScale(scale);
       const label = scene.add.text(cx + 54, 23, '0', textStyle(24, '#ffffff', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0, 0.5);
       this.root.add([g, icon, label]);
@@ -405,8 +413,10 @@ export function flyCoins(scene, from, to, count = 10, texture = 'coin', done) {
  * canopy, ground). Returns the tile sprites so callers can animate them.
  */
 export function addForestBackdrop(scene, { dim = 0 } = {}) {
-  scene.add.image(WIDTH / 2, HEIGHT / 2, 'bg_sky');
-  const clouds = scene.add.tileSprite(WIDTH / 2, 150, WIDTH, 260, 'bg_clouds');
+  scene.add.image(0, 0, 'sky3d').setOrigin(0).setDisplaySize(WIDTH, HEIGHT);
+  scene.add.image(WIDTH * 0.78, HEIGHT * 0.16, 'sun').setScale(1.1);
+  const clouds = scene.add.tileSprite(WIDTH / 2, Math.min(150, HEIGHT * 0.2), WIDTH, 260, 'bg_clouds');
+  scene.add.tileSprite(WIDTH / 2, HEIGHT - 330, WIDTH, 300, 'bg_mountains').setAlpha(0.95);
   const canopy = scene.add.tileSprite(WIDTH / 2, HEIGHT - 200 - 40, WIDTH, 400, 'bg_canopy');
   const ground = scene.add.tileSprite(WIDTH / 2, HEIGHT - 45, WIDTH, 130, 'ground');
   if (dim > 0) scene.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, COLORS.bgDark, dim);

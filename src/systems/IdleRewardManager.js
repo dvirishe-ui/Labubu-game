@@ -7,7 +7,7 @@
  * -------
  *   elapsed              = clamp((now - lastIdleClaimTimestamp) / 1000, 0, MAX_OFFLINE_SECONDS)
  *   CollectionMultiplier = 1 + 0.05 * uniqueDollsOwned
- *   ProgressMultiplier   = 1 + 0.10 * floor(highScore / 1000)
+ *   ProgressMultiplier   = 1 + 0.10 * floor(bestDistance / 1000)
  *   PerkMultiplier       = 1 + sum(idleBonus perks of equipped items)
  *   ratePerSecond        = BASE_RATE * CollectionMultiplier * ProgressMultiplier * PerkMultiplier
  *   idleCoins            = floor(elapsed * ratePerSecond)
@@ -36,7 +36,8 @@ export class IdleRewardManager {
 
   /** +10% per full 1000 m of best distance - rewards getting better at the runner. */
   getProgressMultiplier() {
-    return 1 + IDLE.HIGHSCORE_RATE_BONUS_PER_1000M * Math.floor(this.save.data.stats.highScore / 1000);
+    const best = this.save.data.stats.bestDistance ?? this.save.data.stats.highScore;
+    return 1 + IDLE.HIGHSCORE_RATE_BONUS_PER_1000M * Math.floor(best / 1000);
   }
 
   getPerkMultiplier() {

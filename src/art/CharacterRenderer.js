@@ -348,12 +348,8 @@ function drawBody(ctx, loadout, pal) {
   ctx.restore();
 }
 
-/** Head, face, teeth, eyes. */
-function drawHead(ctx, loadout, pal, pose) {
-  const doll = loadout.baseDoll;
-  const cx = 66;
-  const cy = 66;
-
+/** Fluffy head: a cloud of overlapping tufts with shading, strands and rim light. */
+function drawFurBall(ctx, cx, cy, pal) {
   // Head fur: a cloud of overlapping tufts, outlined by drawing the same
   // cloud slightly larger in the outline colour first.
   const tufts = [];
@@ -411,6 +407,15 @@ function drawHead(ctx, loadout, pal, pose) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
+
+/** Head, face, teeth, eyes. */
+function drawHead(ctx, loadout, pal, pose) {
+  const doll = loadout.baseDoll;
+  const cx = 66;
+  const cy = 66;
+
+  drawFurBall(ctx, cx, cy, pal);
 
   // Speckled fur (Sesame colorway)
   if (pal.speckle) {
@@ -815,6 +820,321 @@ export function loadoutFromEquipped(equipped) {
 export function bakePlayerTextures(scene, equipped) {
   const loadout = loadoutFromEquipped(equipped);
   bakeCharacterSheet(scene, 'player_sheet', loadout, RES); // crisp on high-DPI screens
+  bakeBackSheet(scene, 'player_back', loadout, RES * 1.25); // 3D runner (drawn larger)
   bakeCharacterFrame(scene, 'player_preview', loadout, 'idle', 2);
   bakeCharacterFrame(scene, 'player_wave', loadout, 'wave', 2);
+}
+
+// ============================================================================
+// Back view (3D lane runner): the camera follows Labubu from behind.
+// ============================================================================
+
+/** Back-view poses: per-leg lift (0..1), arm swing, bounce. */
+export const BACK_POSES = {
+  run0: { liftL: 1, liftR: 0, armL: 0.7, armR: -0.5, bob: -2 },
+  run1: { liftL: 0.35, liftR: 0.1, armL: 0.2, armR: 0, bob: 0 },
+  run2: { liftL: 0, liftR: 1, armL: -0.5, armR: 0.7, bob: -2 },
+  run3: { liftL: 0.1, liftR: 0.35, armL: 0, armR: 0.2, bob: 0 },
+  jump: { liftL: 1, liftR: 1, armL: 1.9, armR: 1.9, bob: -4, ears: 0.25 },
+  fall: { liftL: 0.3, liftR: 0.5, armL: 1.2, armR: 1.2, bob: 0, ears: -0.15 },
+  duck: { liftL: 0, liftR: 0, armL: 0.4, armR: 0.4, bob: 0, duck: true },
+  idle: { liftL: 0, liftR: 0, armL: 0.1, armR: 0.1, bob: 0 }
+};
+export const BACK_FRAMES = Object.keys(BACK_POSES);
+
+function backLeg(ctx, x, lift, pal, shoes) {
+  const footY = 166 - lift * 16;
+  roundRect(ctx, x - 7, 128, 14, footY - 128, 6);
+  ctx.fillStyle = pal.shade;
+  ctx.fill();
+  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  // The lifted foot shows its sole to the camera.
+  const sole = shoes === 'canvas_sneakers' ? '#ffffff' : shade(pal.shade, -25);
+  ellipse(ctx, x, footY + 2, 9, lift > 0.5 ? 7 : 5);
+  ctx.fillStyle = shoes === 'canvas_sneakers' ? '#4b7bd6' : pal.fur;
+  ctx.fill();
+  ctx.stroke();
+  if (lift > 0.5) {
+    ellipse(ctx, x, footY + 3, 6, 4);
+    ctx.fillStyle = sole;
+    ctx.fill();
+    if (shoes === 'canvas_sneakers') {
+      ctx.strokeStyle = '#e94b4b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - 5, footY + 3);
+      ctx.lineTo(x + 5, footY + 3);
+      ctx.stroke();
+    }
+  }
+}
+
+function backArm(ctx, x, swing, pal, sleeve, side) {
+  ctx.save();
+  ctx.translate(x, 108);
+  ctx.rotate(side * (0.25 + swing * 0.6));
+  roundRect(ctx, -5, -2, 10, 22, 5);
+  ctx.fillStyle = sleeve || pal.fur;
+  ctx.fill();
+  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ellipse(ctx, 0, 21, 5.5, 5);
+  ctx.fillStyle = pal.fur;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function backTorso(ctx, loadout, pal) {
+  const doll = loadout.baseDoll;
+  const outfit = loadout.outfit;
+  ellipse(ctx, 64, 120, 24, 21);
+  const g = ctx.createLinearGradient(0, 100, 0, 142);
+  g.addColorStop(0, pal.fur);
+  g.addColorStop(1, pal.shade);
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+
+  ctx.save();
+  ellipse(ctx, 64, 120, 23, 20);
+  ctx.clip();
+  if (outfit === 'lumberjack_vest' || (doll === 'beaver_labubu_secret' && !outfit)) {
+    plaid(ctx, 38, 98, 52, 46, outfit ? '#c7362f' : '#b8312c', '#1f1a24', '#f2d16b');
+  } else if (outfit === 'raincoat') {
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillRect(38, 98, 52, 46);
+    ctx.fillStyle = '#e8b400';
+    ctx.fillRect(38, 136, 52, 8);
+  } else if (doll === 'space_explorer') {
+    ctx.fillStyle = '#f7f9fc';
+    ctx.fillRect(38, 98, 52, 46);
+  }
+  ctx.restore();
+
+  // Back details over the torso
+  if (outfit === 'raincoat') {
+    // Hood folded at the neck
+    ellipse(ctx, 64, 101, 16, 7);
+    ctx.fillStyle = '#f2c200';
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (doll === 'space_explorer' && !outfit) {
+    // Little jet-pack
+    roundRect(ctx, 50, 104, 28, 30, 6);
+    ctx.fillStyle = '#c4cdd9';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#4f7cff';
+    ctx.fillRect(55, 110, 18, 4);
+    ctx.fillStyle = '#ff5a6e';
+    ctx.fillRect(55, 118, 18, 4);
+  }
+  if (doll === 'zimomo_king' && !outfit) {
+    // Royal cape flowing down the back
+    ctx.beginPath();
+    ctx.moveTo(44, 100);
+    ctx.lineTo(84, 100);
+    ctx.quadraticCurveTo(94, 128, 90, 150);
+    ctx.lineTo(38, 150);
+    ctx.quadraticCurveTo(34, 128, 44, 100);
+    ctx.closePath();
+    ctx.fillStyle = '#c4202a';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f5d76e';
+    ctx.fillRect(44, 100, 40, 5);
+  }
+}
+
+function backTail(ctx, loadout, pal) {
+  const doll = loadout.baseDoll;
+  if (loadout.tail === 'beaver_paddle_tail' || doll === 'beaver_labubu_secret') {
+    ctx.save();
+    ellipse(ctx, 64, 150, 14, 22);
+    ctx.fillStyle = '#6b4226';
+    ctx.fill();
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ellipse(ctx, 64, 150, 14, 22);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(30,15,5,0.55)';
+    ctx.lineWidth = 1.2;
+    for (let i = 120; i < 180; i += 6) {
+      ctx.beginPath();
+      ctx.moveTo(48, i);
+      ctx.lineTo(80, i + 14);
+      ctx.moveTo(80, i);
+      ctx.lineTo(48, i + 14);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (doll === 'zimomo_king') {
+    ctx.strokeStyle = pal.shade;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(64, 136);
+    ctx.bezierCurveTo(64, 160, 96, 160, 100, 132);
+    ctx.stroke();
+    furCircle(ctx, 101, 128, 8, 8, 2);
+    ctx.fillStyle = pal.fur;
+    ctx.fill();
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+  }
+}
+
+function backHeadwear(ctx, loadout) {
+  const doll = loadout.baseDoll;
+  const hw = loadout.headwear;
+  const cx = 64;
+  const cy = 66;
+  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = OUTLINE;
+  if (hw === 'beanie') {
+    ctx.beginPath();
+    ctx.moveTo(cx - 33, cy - 6);
+    ctx.bezierCurveTo(cx - 30, cy - 44, cx + 30, cy - 44, cx + 33, cy - 6);
+    ctx.closePath();
+    ctx.fillStyle = '#5bb381';
+    ctx.fill();
+    ctx.stroke();
+    roundRect(ctx, cx - 35, cy - 12, 70, 12, 6);
+    ctx.fillStyle = '#3f8f63';
+    ctx.fill();
+    ctx.stroke();
+  } else if (hw === 'beaver_cap') {
+    ctx.beginPath();
+    ctx.moveTo(cx - 32, cy - 8);
+    ctx.bezierCurveTo(cx - 28, cy - 46, cx + 28, cy - 46, cx + 32, cy - 8);
+    ctx.closePath();
+    ctx.fillStyle = '#7a4a2a';
+    ctx.fill();
+    ctx.stroke();
+    for (const ex of [cx - 20, cx + 20]) {
+      ctx.beginPath();
+      ctx.arc(ex, cy - 36, 7, 0, Math.PI * 2);
+      ctx.fillStyle = '#7a4a2a';
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else if (doll === 'zimomo_king') {
+    ctx.beginPath();
+    ctx.moveTo(cx - 16, cy - 30);
+    ctx.lineTo(cx - 16, cy - 46);
+    ctx.lineTo(cx - 8, cy - 38);
+    ctx.lineTo(cx, cy - 50);
+    ctx.lineTo(cx + 8, cy - 38);
+    ctx.lineTo(cx + 16, cy - 46);
+    ctx.lineTo(cx + 16, cy - 30);
+    ctx.closePath();
+    ctx.fillStyle = '#ffc93c';
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (doll === 'space_explorer') {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(170,215,255,0.18)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(120,170,230,0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + 20, cy - 38);
+    ctx.lineTo(cx + 28, cy - 54);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + 28, cy - 56, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff5a6e';
+    ctx.fill();
+  }
+}
+
+/** Draws Labubu seen from behind (for the 3D runner). */
+export function drawCharacterBack(ctx, loadout, pose = BACK_POSES.idle) {
+  const dollDef = CATALOG[loadout.baseDoll] || CATALOG.labubu_classic;
+  const pal = dollDef.palette;
+  const sleeve = loadout.outfit === 'raincoat' ? '#ffd23f' : null;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.translate(0, DRAW_OFFSET_Y);
+
+  if (pose.duck) {
+    // Tucked roll: squashed body with the fluffy head pulled down over it.
+    ctx.save();
+    ctx.translate(64, 156);
+    ctx.scale(1.15, 0.65);
+    ctx.translate(-64, -156);
+    backLeg(ctx, 52, 0, pal, loadout.shoes);
+    backLeg(ctx, 76, 0, pal, loadout.shoes);
+    backTorso(ctx, loadout, pal);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(0, 54);
+    drawEar(ctx, 46, 52, -1.25, pal, false);
+    drawEar(ctx, 82, 52, 1.25, pal, false);
+    drawFurBall(ctx, 64, 66, pal);
+    backHeadwear(ctx, loadout);
+    ctx.restore();
+    backTail(ctx, loadout, pal);
+    ctx.restore();
+    return;
+  }
+
+  const bob = pose.bob || 0;
+  backLeg(ctx, 52, pose.liftL, pal, loadout.shoes);
+  backLeg(ctx, 76, pose.liftR, pal, loadout.shoes);
+  backArm(ctx, 40, pose.armL, pal, sleeve, 1);
+  backArm(ctx, 88, pose.armR, pal, sleeve, -1);
+  ctx.save();
+  ctx.translate(0, bob * 0.5);
+  backTorso(ctx, loadout, pal);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(0, bob);
+  const ears = pose.ears || 0;
+  drawEar(ctx, 50, 40, -0.28 - ears, pal, false);
+  drawEar(ctx, 78, 40, 0.28 + ears, pal, false);
+  drawFurBall(ctx, 64, 66, pal);
+  // A little cowlick swirl on the back of the head
+  ctx.strokeStyle = shade(pal.shade, -15);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(64, 72, 7, Math.PI * 0.2, Math.PI * 1.7);
+  ctx.stroke();
+  backHeadwear(ctx, loadout);
+  ctx.restore();
+  backTail(ctx, loadout, pal);
+  ctx.restore();
+}
+
+/** Bakes the back-view runner sheet (BACK_FRAMES) into one texture. */
+export function bakeBackSheet(scene, key, loadout, res = 1) {
+  const fw = Math.round(FRAME_W * res);
+  const fh = Math.round(FRAME_H * res);
+  const tex = freshCanvasTexture(scene, key, fw * BACK_FRAMES.length, fh);
+  const ctx = tex.getContext();
+  BACK_FRAMES.forEach((name, i) => {
+    ctx.save();
+    ctx.translate(i * fw, 0);
+    ctx.scale(res, res);
+    drawCharacterBack(ctx, loadout, BACK_POSES[name]);
+    ctx.restore();
+    if (!tex.has(name)) tex.add(name, 0, i * fw, 0, fw, fh);
+  });
+  tex.refresh();
+  return tex;
 }

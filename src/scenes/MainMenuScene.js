@@ -5,7 +5,7 @@
  * "Welcome Back!" offline-earnings dialog once per app session.
  */
 import Phaser from 'phaser';
-import { WIDTH, HEIGHT, COLORS, EVENTS, ECONOMY } from '../config/GameConfig.js';
+import { WIDTH, HEIGHT, COLORS, EVENTS, ECONOMY, LUCKY_SPIN } from '../config/GameConfig.js';
 import { CATALOG } from '../config/GachaDropTable.js';
 import { getQuestTemplate, REWARD_LABELS } from '../config/QuestCatalog.js';
 import { Services } from '../systems/Services.js';
@@ -16,6 +16,7 @@ import { showRewardedAd } from '../systems/AdService.js';
 import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
 import { canFullscreen, toggleFullscreen } from '../ui/Fullscreen.js';
+import { canSpin, spinWheel } from '../systems/DailyRewards.js';
 import {
   addForestBackdrop,
   CurrencyBar,
@@ -33,12 +34,6 @@ import {
 
 const REWARD_ICON = { popCoins: 'coin', blindBoxTickets: 'ticket', goldenKeys: 'key' };
 
-// Layout anchors: the right column hugs the right edge on wide phones.
-const EXTRA = WIDTH - 1280;
-const PANEL_X = WIDTH - 400;
-const HERO_X = 230 + EXTRA * 0.25;
-const CENTER_X = 590 + EXTRA * 0.6;
-
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
     super('MainMenu');
@@ -52,6 +47,7 @@ export class MainMenuScene extends Phaser.Scene {
     addForestBackdrop(this);
     this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0xffe3ec, 0.18);
 
+    this.L = this.computeLayout();
     this.currencyBar = new CurrencyBar(this, 20, 16);
 
     this.buildTopRight();
@@ -80,11 +76,65 @@ export class MainMenuScene extends Phaser.Scene {
 
   // -------------------------------------------------------------------------- layout
 
+  /**
+   * Layout for the current orientation. Landscape: hero | centre column |
+   * panels. Portrait: logo, hero with side buttons, PLAY, and the two panels
+   * side by side at the bottom - everything anchored so it fits 9:16 to 9:20.
+   */
+  computeLayout() {
+    const portrait = HEIGHT > WIDTH;
+    if (!portrait) {
+      const extra = WIDTH - 1280;
+      const heroX = 230 + extra * 0.25;
+      const cx = 590 + extra * 0.6;
+      return {
+        portrait,
+        iconsY: 39,
+        syncX: null,
+        hero: { x: heroX, feet: 590, scale: 1.25 },
+        heroName: [heroX, 632],
+        showroom: [heroX, 684, 210],
+        spin: [cx + 125, 490],
+        logo: [cx, 130, 92],
+        subtitle: [cx, 200],
+        play: [cx, 320],
+        best: [cx, 410],
+        quests: [cx - 125, 490],
+        collection: [cx, 560],
+        box: { x: WIDTH - 400, y: 90, s: 1 },
+        bank: { x: WIDTH - 400, y: 430, s: 1 }
+      };
+    }
+    const H = HEIGHT;
+    const panelS = 0.88;
+    const panelsY = H - 290;
+    const feet = panelsY - 330;
+    return {
+      portrait,
+      iconsY: 100,
+      syncX: 110,
+      hero: { x: WIDTH / 2, feet, scale: Math.min(1.15, (feet - 290) / 352) },
+      heroName: [WIDTH / 2, feet + 30],
+      showroom: [WIDTH - 110, feet - 150, 180],
+      spin: [110, feet - 150],
+      logo: [WIDTH / 2, 190, 84],
+      subtitle: [WIDTH / 2, 252],
+      play: [WIDTH / 2, panelsY - 225],
+      best: [WIDTH / 2, panelsY - 152],
+      quests: [WIDTH / 2, panelsY - 88],
+      collection: [WIDTH / 2, panelsY - 34],
+      box: { x: 12, y: panelsY, s: panelS },
+      bank: { x: WIDTH - 12 - 370 * panelS, y: panelsY + 22, s: panelS }
+    };
+  }
+
   buildTopRight() {
-    // Sync status pill
+    const L = this.L;
     const fs = canFullscreen();
-    const right = WIDTH - (fs ? 60 : 130);
-    this.syncPill = this.add.container(right - 335, 39);
+    const right = WIDTH - (fs ? 50 : 120);
+    const y = L.iconsY;
+    // Sync status pill
+    this.syncPill = this.add.container(L.syncX ?? right - 335, y);
     this.syncPillBg = this.add.graphics();
     this.syncDot = this.add.circle(-62, 0, 8, 0x9aa0a6);
     this.syncText = this.add.text(-48, 0, '', textStyle(18, '#ffffff', { stroke: '#3d2a52', strokeThickness: 3 })).setOrigin(0, 0.5);
@@ -93,12 +143,12 @@ export class MainMenuScene extends Phaser.Scene {
     this.syncPill.setSize(170, 40).setInteractive({ useHandCursor: true });
     this.syncPill.on('pointerup', () => Services.sync.syncNow({ force: true }));
 
-    makeIconButton(this, right - 210, 39, '♛', () => this.showLeaderboard(), { size: 54 });
-    this.muteBtn = makeIconButton(this, right - 140, 39, '♪', () => this.toggleSound(), { size: 54 });
-    makeIconButton(this, right - 70, 39, '≡', () => this.showSettings(), { size: 54 });
+    makeIconButton(this, right - 210, y, '♛', () => this.showLeaderboard(), { size: 54 });
+    this.muteBtn = makeIconButton(this, right - 140, y, '♪', () => this.toggleSound(), { size: 54 });
+    makeIconButton(this, right - 70, y, '≡', () => this.showSettings(), { size: 54 });
     if (fs) {
-      // Fullscreen + landscape lock (Android / desktop; hidden where unsupported)
-      const btn = makeIconButton(this, right, 39, '', () => toggleFullscreen(), { size: 54 });
+      // True fullscreen (Android / desktop; hidden where unsupported)
+      const btn = makeIconButton(this, right, y, '', () => toggleFullscreen(), { size: 54 });
       const g = this.add.graphics();
       g.lineStyle(4, COLORS.panelDark, 1);
       for (const [sx, sy] of [
@@ -119,53 +169,63 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   buildCharacter() {
-    const x = HERO_X;
-    this.add.image(x, 585, 'pedestal');
-    this.hero = this.add.image(x, 590, 'player_preview').setOrigin(0.5, 1).setScale(1.25);
-    this.tweens.add({ targets: this.hero, scaleY: 1.28, scaleX: 1.23, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const { x, feet, scale } = this.L.hero;
+    this.add.image(x, feet - 5, 'pedestal').setScale(scale / 1.25);
+    this.hero = this.add.image(x, feet, 'player_preview').setOrigin(0.5, 1).setScale(scale);
+    this.tweens.add({ targets: this.hero, scaleY: scale * 1.03, scaleX: scale * 0.98, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.hero.setInteractive({ useHandCursor: true });
     this.hero.on('pointerup', () => {
       Services.audio.play('jump');
       this.hero.setTexture('player_wave');
-      this.tweens.add({ targets: this.hero, y: 560, duration: 160, yoyo: true, ease: 'Quad.easeOut', onComplete: () => this.hero.setTexture('player_preview') });
+      this.tweens.add({ targets: this.hero, y: feet - 30, duration: 160, yoyo: true, ease: 'Quad.easeOut', onComplete: () => this.hero.setTexture('player_preview') });
     });
-    this.heroName = outlinedText(this, x, 632, '', 22, '#fff4e6');
-    makeButton(this, x, 684, 'Showroom', () => this.go('Showroom'), { w: 210, h: 56, fontSize: 24, color: COLORS.mint, colorDark: 0x4fb594 });
+    this.heroName = outlinedText(this, ...this.L.heroName, '', 22, '#fff4e6');
+    const [sx, sy, sw] = this.L.showroom;
+    makeButton(this, sx, sy, 'Showroom', () => this.go('Showroom'), { w: sw, h: 56, fontSize: 24, color: COLORS.mint, colorDark: 0x4fb594 });
   }
 
   buildCenter() {
-    const cx = CENTER_X;
-    const logo = outlinedText(this, cx, 130, 'LABUBU', 92, '#ff8fb1');
-    outlinedText(this, cx, 200, 'Blind Box Run & Collect', 30, '#fff4e6');
+    const L = this.L;
+    const logo = outlinedText(this, L.logo[0], L.logo[1], 'LABUBU', L.logo[2], '#ff8fb1');
+    outlinedText(this, ...L.subtitle, 'Blind Box Run & Collect', 30, '#fff4e6');
     this.tweens.add({ targets: logo, angle: { from: -2, to: 2 }, yoyo: true, repeat: -1, duration: 1400, ease: 'Sine.easeInOut' });
 
-    this.playBtn = makeButton(this, cx, 320, 'PLAY', () => this.go('Runner'), { w: 300, h: 104, fontSize: 52, color: COLORS.gold, colorDark: COLORS.goldDark });
-    this.tweens.add({ targets: this.playBtn, scale: 1.05, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
-    this.bestText = outlinedText(this, cx, 410, '', 26, '#fff4e6');
+    this.playBtn = makeButton(this, ...L.play, 'PLAY', () => this.go('Runner'), { w: 320, h: 108, fontSize: 56, color: COLORS.gold, colorDark: COLORS.goldDark });
+    this.tweens.add({ targets: this.playBtn, scale: 1.06, yoyo: true, repeat: -1, duration: 650, ease: 'Sine.easeInOut' });
+    this.bestText = outlinedText(this, ...L.best, '', 26, '#fff4e6');
 
-    this.questBtn = makeButton(this, cx, 490, 'Quests', () => this.showQuests(), { w: 240, h: 66, fontSize: 28, color: COLORS.rare, colorDark: 0x2b7bc0 });
-    this.questBadge = this.add.container(cx + 110, 462);
+    this.questBtn = makeButton(this, ...L.quests, 'Quests', () => this.showQuests(), { w: 230, h: 66, fontSize: 28, color: COLORS.rare, colorDark: 0x2b7bc0 });
+    this.questBadge = this.add.container(L.quests[0] + 105, L.quests[1] - 28);
     this.questBadge.add(this.add.circle(0, 0, 17, 0xe8324b).setStrokeStyle(3, 0xffffff));
     this.questBadgeText = this.add.text(0, 0, '0', textStyle(18, '#ffffff')).setOrigin(0.5);
     this.questBadge.add(this.questBadgeText);
     this.tweens.add({ targets: this.questBadge, scale: 1.2, yoyo: true, repeat: -1, duration: 500 });
 
-    this.collectionText = this.add.text(cx, 560, '', textStyle(20, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
+    // Daily Lucky Spin
+    this.spinBtn = makeButton(this, ...L.spin, 'Lucky Spin', () => this.showLuckySpin(), { w: 200, h: 62, fontSize: 24, color: COLORS.pink, colorDark: COLORS.pinkDark });
+    this.spinBadge = this.add.container(L.spin[0] + 92, L.spin[1] - 26);
+    this.spinBadge.add([this.add.circle(0, 0, 15, 0xe8324b).setStrokeStyle(3, 0xffffff), this.add.text(0, 0, '!', textStyle(18, '#ffffff')).setOrigin(0.5)]);
+    this.tweens.add({ targets: this.spinBadge, scale: 1.25, yoyo: true, repeat: -1, duration: 420 });
+
+    this.collectionText = this.add.text(...L.collection, '', textStyle(20, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
   }
 
   buildBoxPanel() {
-    const x = PANEL_X;
-    const y = 90;
+    const { x: px, y: py, s } = this.L.box;
+    const c = this.add.container(px, py).setScale(s);
+    this.boxPanel = c;
     const w = 370;
     const h = 320;
-    makePanel(this, x, y, w, h);
-    this.add.text(x + w / 2, y + 26, 'Blind Box', textStyle(28)).setOrigin(0.5);
-    this.boxImg = this.add.image(x + 95, y + 150, 'box_icon').setScale(1.15);
-    this.tweens.add({ targets: this.boxImg, y: y + 140, yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.easeInOut' });
-    this.pityText = this.add.text(x + 95, y + 232, '', textStyle(15, '#7a6a8a', { align: 'center' })).setOrigin(0.5);
+    c.add(makePanel(this, 0, 0, w, h));
+    c.add(this.add.text(w / 2, 26, 'Blind Box', textStyle(28)).setOrigin(0.5));
+    this.boxImg = this.add.image(95, 150, 'box_icon').setScale(1.15);
+    c.add(this.boxImg);
+    this.tweens.add({ targets: this.boxImg, y: 140, yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.easeInOut' });
+    this.pityText = this.add.text(95, 232, '', textStyle(15, '#7a6a8a', { align: 'center' })).setOrigin(0.5);
+    c.add(this.pityText);
 
-    this.openBtn = makeButton(this, x + 268, y + 100, 'Open', () => this.openBox('ticket'), { w: 170, h: 60, fontSize: 26, icon: 'ticket', iconScale: 0.55 });
-    this.buyBtn = makeButton(this, x + 268, y + 172, `${ECONOMY.TICKET_PRICE_COINS}`, () => this.buyTicket(), {
+    this.openBtn = makeButton(this, 268, 100, 'Open', () => this.openBox('ticket'), { w: 170, h: 60, fontSize: 26, icon: 'ticket', iconScale: 0.55 });
+    this.buyBtn = makeButton(this, 268, 172, `${ECONOMY.TICKET_PRICE_COINS}`, () => this.buyTicket(), {
       w: 170,
       h: 56,
       fontSize: 22,
@@ -174,8 +234,7 @@ export class MainMenuScene extends Phaser.Scene {
       color: COLORS.mint,
       colorDark: 0x4fb594
     });
-    this.add.text(x + 268, y + 208, 'buy a ticket', textStyle(14, '#7a6a8a')).setOrigin(0.5);
-    this.keyBtn = makeButton(this, x + 268, y + 262, 'Key Box', () => this.openBox('key'), {
+    this.keyBtn = makeButton(this, 268, 262, 'Key Box', () => this.openBox('key'), {
       w: 170,
       h: 56,
       fontSize: 22,
@@ -184,31 +243,39 @@ export class MainMenuScene extends Phaser.Scene {
       color: COLORS.epic,
       colorDark: 0x7a3dcc
     });
+    c.add([this.openBtn, this.buyBtn, this.add.text(268, 208, 'buy a ticket', textStyle(14, '#7a6a8a')).setOrigin(0.5), this.keyBtn]);
   }
 
   buildIdleBank() {
-    const x = PANEL_X;
-    const y = 430;
+    const { x: px, y: py, s } = this.L.bank;
+    const c = this.add.container(px, py).setScale(s);
+    this.bankPanel = c;
     const w = 370;
     const h = 270;
-    makePanel(this, x, y, w, h);
-    this.add.text(x + w / 2, y + 26, 'Pop Bank', textStyle(28)).setOrigin(0.5);
-    this.bankCoinIcon = this.add.image(x + 60, y + 92, 'coin').setScale(1.3);
+    c.add(makePanel(this, 0, 0, w, h));
+    c.add(this.add.text(w / 2, 26, 'Pop Bank', textStyle(28)).setOrigin(0.5));
+    this.bankCoinIcon = this.add.image(60, 92, 'coin').setScale(1.3);
     this.tweens.add({ targets: this.bankCoinIcon, scaleX: { from: 1.3, to: -1.3 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.bankAmount = this.add.text(x + 100, y + 80, '0', textStyle(42, '#c98a00', { stroke: '#3d2a52', strokeThickness: 5 })).setOrigin(0, 0.5);
-    this.bankRate = this.add.text(x + 100, y + 116, '', textStyle(16, '#7a6a8a'));
-    this.bankBar = makeProgressBar(this, x + 30, y + 150, w - 60, 20, { fill: COLORS.gold });
-    this.bankCap = this.add.text(x + w / 2, y + 184, '', textStyle(15, '#7a6a8a')).setOrigin(0.5);
-    this.collectBtn = makeButton(this, x + w / 2, y + 230, 'Collect', () => this.collectIdle(1), {
+    this.bankAmount = this.add.text(100, 80, '0', textStyle(42, '#c98a00', { stroke: '#3d2a52', strokeThickness: 5 })).setOrigin(0, 0.5);
+    this.bankRate = this.add.text(100, 116, '', textStyle(16, '#7a6a8a'));
+    this.bankBar = makeProgressBar(this, 30, 150, w - 60, 20, { fill: COLORS.gold });
+    this.bankCap = this.add.text(w / 2, 184, '', textStyle(15, '#7a6a8a')).setOrigin(0.5);
+    this.collectBtn = makeButton(this, w / 2, 230, 'Collect', () => this.collectIdle(1), {
       w: 220,
       h: 56,
       fontSize: 26,
       color: COLORS.gold,
       colorDark: COLORS.goldDark
     });
+    c.add([this.bankCoinIcon, this.bankAmount, this.bankRate, this.bankBar.graphics, this.bankCap, this.collectBtn]);
     // The bank ticks up live.
     this.time.addEvent({ delay: 250, loop: true, callback: () => this.updateIdleBank() });
     this.updateIdleBank();
+  }
+
+  /** World position of a point inside a scaled panel container. */
+  panelPoint(c, x, y) {
+    return { x: c.x + x * c.scaleX, y: c.y + y * c.scaleY };
   }
 
   // -------------------------------------------------------------------------- refresh
@@ -216,7 +283,8 @@ export class MainMenuScene extends Phaser.Scene {
   refresh() {
     const d = Services.save.data;
     this.heroName.setText(CATALOG[d.equipped.baseDoll]?.name || 'Labubu');
-    this.bestText.setText(`Best run: ${d.stats.highScore.toLocaleString('en-US')} m`);
+    this.bestText.setText(`Best score: ${d.stats.highScore.toLocaleString('en-US')}`);
+    this.spinBadge.setVisible(canSpin(Services.save));
     const tickets = d.currencies.blindBoxTickets;
     this.openBtn.setEnabled(tickets > 0);
     this.buyBtn.setEnabled(d.currencies.popCoins >= ECONOMY.TICKET_PRICE_COINS);
@@ -291,7 +359,8 @@ export class MainMenuScene extends Phaser.Scene {
   buyTicket() {
     if (buyTicket(Services.save)) {
       Services.audio.play('ticket');
-      floatText(this, PANEL_X + 268, 260, '+1 ticket', '#ff8fb1');
+      const pt = this.panelPoint(this.boxPanel, 268, 170);
+      floatText(this, pt.x, pt.y, '+1 ticket', '#ff8fb1');
     } else {
       Services.audio.play('error');
     }
@@ -301,8 +370,9 @@ export class MainMenuScene extends Phaser.Scene {
     const paid = Services.idle.claim(multiplier);
     if (paid <= 0) return;
     Services.audio.play('cash');
-    flyCoins(this, { x: this.bankCoinIcon.x, y: this.bankCoinIcon.y }, this.currencyBar.iconPosition('popCoins'), Math.min(14, 4 + Math.floor(paid / 20)));
-    floatText(this, this.bankCoinIcon.x + 80, this.bankCoinIcon.y - 20, `+${paid}`);
+    const from = this.panelPoint(this.bankPanel, this.bankCoinIcon.x, this.bankCoinIcon.y);
+    flyCoins(this, from, this.currencyBar.iconPosition('popCoins'), Math.min(14, 4 + Math.floor(paid / 20)));
+    floatText(this, from.x + 80, from.y - 20, `+${paid}`);
     this.updateIdleBank();
   }
 
@@ -444,11 +514,15 @@ export class MainMenuScene extends Phaser.Scene {
             floatText(this, WIDTH / 2, HEIGHT / 2, `+${reward.amount} ${REWARD_LABELS[reward.type]}`);
           }
           onClaim();
+        } else if (!done) {
+          // "Go!" jumps straight to where the quest is played.
+          const boxQuest = tpl?.event === EVENTS.BOX_OPENED && Services.save.data.currencies.blindBoxTickets > 0;
+          this.go(boxQuest ? 'Unboxing' : 'Runner', boxQuest ? { source: 'ticket' } : undefined);
         }
       },
-      { w: 130, h: 50, fontSize: 22, color: done ? COLORS.gold : 0xc9bfd6, colorDark: done ? COLORS.goldDark : 0x9a8fab }
+      { w: 130, h: 50, fontSize: 22, color: done ? COLORS.gold : COLORS.mint, colorDark: done ? COLORS.goldDark : 0x4fb594 }
     );
-    btn.setEnabled(done && !q.claimed);
+    btn.setEnabled(!q.claimed);
     objs.push(btn);
     return objs;
   }
@@ -480,7 +554,7 @@ export class MainMenuScene extends Phaser.Scene {
       const rank = this.add.text(36, y + 26, `#${i + 1}`, textStyle(22, medal || COLORS.text, medal ? { stroke: '#3d2a52', strokeThickness: 4 } : {})).setOrigin(0.5);
       const icon = this.textures.exists(`icon_${e.doll}`) ? this.add.image(100, y + 26, `icon_${e.doll}`).setScale((0.42 * 0.75) / ICON_RES) : null;
       const name = this.add.text(140, y + 26, e.name || 'Labubu', textStyle(22)).setOrigin(0, 0.5);
-      const score = this.add.text(640, y + 26, `${Number(e.score).toLocaleString('en-US')} m`, textStyle(22, '#c98a00')).setOrigin(1, 0.5);
+      const score = this.add.text(640, y + 26, `${Number(e.score).toLocaleString('en-US')}`, textStyle(22, '#c98a00')).setOrigin(1, 0.5);
       list.inner.add([g, rank, ...(icon ? [icon] : []), name, score]);
     });
     list.setContentHeight(entries.length * 58);
@@ -577,5 +651,82 @@ export class MainMenuScene extends Phaser.Scene {
         { w: 300, h: 50, fontSize: 20, color: 0xe8324b, colorDark: 0xa31d30 }
       )
     );
+  }
+
+  /** Daily Lucky Spin: one free spin of the prize wheel per day. */
+  showLuckySpin() {
+    const modal = new Modal(this, { width: 620, height: 720, title: 'Lucky Spin', onClose: () => this.refresh() });
+    const cx = 310;
+    const cy = 330;
+    const R = 230;
+    const wheel = this.add.container(cx, cy);
+    const g = this.add.graphics();
+    const n = LUCKY_SPIN.length;
+    const seg = (Math.PI * 2) / n;
+    LUCKY_SPIN.forEach((s, i) => {
+      g.fillStyle(s.color, 1);
+      g.slice(0, 0, R, i * seg, (i + 1) * seg, false);
+      g.fillPath();
+    });
+    g.lineStyle(6, 0xffffff, 1).strokeCircle(0, 0, R);
+    for (let i = 0; i < n; i++) g.lineBetween(0, 0, Math.cos(i * seg) * R, Math.sin(i * seg) * R);
+    wheel.add(g);
+    LUCKY_SPIN.forEach((s, i) => {
+      const a = (i + 0.5) * seg;
+      const t = outlinedText(this, Math.cos(a) * R * 0.66, Math.sin(a) * R * 0.66, s.label, 26, '#ffffff');
+      t.setRotation(a + Math.PI / 2);
+      const icon = { popCoins: 'coin', blindBoxTickets: 'ticket', goldenKeys: 'key' }[s.reward.type];
+      const ic = this.add.image(Math.cos(a) * R * 0.38, Math.sin(a) * R * 0.38, icon).setScale(0.55).setRotation(a + Math.PI / 2);
+      wheel.add([t, ic]);
+    });
+    const hub = this.add.circle(0, 0, 40, 0xfff4e6).setStrokeStyle(6, COLORS.panelDark);
+    wheel.add([hub, this.add.image(0, 0, 'box_icon').setScale(0.42)]);
+    // Pointer at the top
+    const ptr = this.add.graphics();
+    ptr.fillStyle(0xe8324b, 1).fillTriangle(cx - 22, cy - R - 26, cx + 22, cy - R - 26, cx, cy - R + 18);
+    ptr.lineStyle(4, 0xffffff, 1).strokeTriangle(cx - 22, cy - R - 26, cx + 22, cy - R - 26, cx, cy - R + 18);
+    modal.add([wheel, ptr]);
+
+    const status = this.add.text(cx, 610, '', textStyle(22, '#7a6a8a', { align: 'center' })).setOrigin(0.5);
+    const available = canSpin(Services.save);
+    const btn = makeButton(
+      this,
+      cx,
+      660,
+      available ? 'SPIN!' : 'Come back tomorrow',
+      () => {
+        const result = spinWheel(Services.save);
+        if (!result) return;
+        btn.setEnabled(false);
+        // Land the chosen segment's centre under the top pointer after 5 turns.
+        const target = 270 - (result.index + 0.5) * (360 / n) + 360 * 5;
+        let lastTick = 0;
+        this.tweens.add({
+          targets: wheel,
+          angle: target,
+          duration: 3800,
+          ease: 'Cubic.easeOut',
+          onUpdate: () => {
+            const tick = Math.floor(wheel.angle / (360 / n));
+            if (tick !== lastTick) {
+              lastTick = tick;
+              Services.audio.play('spinTick');
+            }
+          },
+          onComplete: () => {
+            Services.audio.play('spinWin');
+            const r = result.segment.reward;
+            const label = { popCoins: 'Pop Coins', blindBoxTickets: r.amount > 1 ? 'Tickets' : 'Ticket', goldenKeys: 'Golden Key' }[r.type];
+            status.setText(`You won ${r.amount} ${label}!`).setColor('#e0567f');
+            floatText(this, WIDTH / 2, HEIGHT / 2, `+${r.amount} ${label}`, '#ffe066', 40);
+            this.spinBadge.setVisible(false);
+          }
+        });
+      },
+      { w: 300, h: 70, fontSize: available ? 34 : 22, color: COLORS.gold, colorDark: COLORS.goldDark }
+    );
+    btn.setEnabled(available);
+    if (!available) status.setText(`Next free spin in ${IdleRewardManager.formatDuration(msUntilMidnight() / 1000)}`);
+    modal.add([status, btn]);
   }
 }

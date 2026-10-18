@@ -62,39 +62,54 @@ npm run cap:ios
 
 ## Controls
 
-| Action | Touch (landscape) | Keyboard |
+| Action | Touch (portrait or landscape) | Keyboard |
 | --- | --- | --- |
-| Jump | Tap the right side (fires on finger-down) or swipe up | Space / Up / W |
+| Change lane | Swipe left / right | ← → / A D |
+| Jump | Tap or swipe up | Space / ↑ / W |
 | Double jump (everyone) / triple jump (Beaver Tail) | Tap again in the air | Press again in the air |
-| Glide (Beaver Tail) | Keep holding after the jump | Hold Space / Up |
-| Duck (fast-falls when airborne) | Hold the left side, or swipe down | Hold Down / S |
-| Use held item | Tap the item slot (top left) | E / Shift / Enter |
+| Glide (Beaver Tail) | Keep your finger down after the jump | Hold Space / ↑ |
+| Roll under gates (slams down when airborne) | Swipe down (hold to keep rolling) | Hold ↓ / S |
+| Use held item | Tap the item bubble | E / Shift / Enter |
 | Rocket start | Tap exactly on "GO!" | Space on "GO!" |
 | Pause | Pause button | Esc / P |
 
-The controls also include coyote time (90 ms) and jump buffering (140 ms). Faint touch-zone guides
-light up under your fingers on touch devices.
+Swipes fire as soon as your finger has moved about 26 px. A quick tap jumps on release, and jump
+buffering lets a tap just before landing still count.
 
-### Phones and full screen
+### Phones: full screen in both orientations
 
-- The logical width follows the device's landscape aspect ratio (1280 to 1600 × 720), so the game fills modern 19.5:9 and 20:9 phones with no black bars.
-- The canvas renders at up to 1.5× (`GameConfig.RES`) and every camera zooms back. Text, UI and the runner sprite stay sharp on high-DPI screens.
-- On a phone held upright, a "turn your phone sideways" screen appears and any run in progress pauses.
-- Where the browser allows it (Android, desktop), a fullscreen button in the menu enters true fullscreen and locks landscape.
+- The short screen side is always 720 logical px and the long side follows the phone (1280 to 1600). The game fills the screen in **portrait and landscape** with no black bars.
+- Rotating the phone re-lays out the game live:
+  - Menus rebuild for the new orientation.
+  - A run in progress just re-projects its 3D camera and keeps going.
+- The canvas renders at up to 1.5× (`GameConfig.RES`) and every camera zooms back, so text and art stay sharp on high-DPI screens.
+- Where the browser allows it (Android, desktop), a menu button enters true fullscreen.
 
-### Mario Kart-style extras
+### Pseudo-3D lane runner
 
-- **Countdown and rocket start:** 3-2-1-GO! Tap right on GO for a speed burst.
-- **Item boxes:** rainbow "?" boxes spin an item roulette. You hold one item at a time and fire it from the item slot:
-  - Dash Mushroom: a speed burst that smashes obstacles.
-  - Super Star: 6 s of invincibility, with rainbow after-images.
-  - Super Magnet.
-  - Coin Rain.
-  - Bubble Shield.
-- **Boost pads:** glowing chevrons on the path give a short speed boost, with speed lines and a camera punch.
-- **Coin combos:** chain coins within 0.7 s. Every 10 in a row pays +3.
-- **Close calls:** clear an obstacle by a hair for +2 coins.
-- **Second Chance:** after a crash, spend 1 ticket to revive once per run (5 s prompt).
+- A camera behind Labubu looks down a three-lane forest road.
+  - `RunnerScene.project(x, y, z)` does the perspective divide.
+  - The road is repainted every frame as about 60 slabs: candy-coloured sections, rainbow kerbs, lane dashes and a pink haze toward the horizon.
+  - The road curves gently left and right, and the mountains, hills and forest band pan with each curve.
+- Billboards scale with depth: obstacles, coins, pickups, and roadside pines, oaks, giant lollipops, mushrooms, bushes and flowers.
+- The runner is drawn from behind with a dedicated back-view sprite sheet. On a crash it turns round to face the camera, dazed.
+- Obstacles:
+  - Stumps, rocks, logs and brambles: jump over them.
+  - Log gates: roll under them.
+  - Giant toadstool houses: change lane. Swerving into the side of one just bumps you back ("BONK!").
+- Pace is fast from the first second: 16 m/s, ramping to 34 m/s. A score multiplier grows by one every 300 m, up to ×6.
+
+### Keeping kids coming back
+
+- **Praise pop-ups:** NICE! → GREAT! → AWESOME! → … → LEGENDARY!, with confetti, for dodge streaks and coin combos.
+- **L-A-B-U-B-U word hunt:** letters appear on the road one at a time. Spell the word in a day for 300 coins + 1 ticket.
+- **Daily Lucky Spin:** one free spin of a prize wheel each day (coins, tickets, a rare Golden Key).
+- **Mario Kart-style extras:**
+  - Countdown with a rocket start.
+  - Item boxes with a roulette: Dash Mushroom, Super Star, Super Magnet, Coin Rain, Bubble Shield.
+  - Boost pads with warp-star streaks.
+  - Coin combos and close calls.
+  - A one-ticket "Second Chance" revive.
 
 ## Project structure
 
@@ -133,15 +148,17 @@ labubu-game/
     │   ├── GachaSystem.js          # pure roll / pity / duplicate logic
     │   ├── PerkCalculator.js       # loadout -> gameplay modifiers
     │   ├── RunnerItems.js          # item-box roulette table
+    │   ├── DailyRewards.js         # L-A-B-U-B-U word hunt + daily Lucky Spin
     │   ├── AdService.js            # rewarded-ad facade (simulated; AdMob hook documented)
     │   ├── EventBus.js             # shared emitter (Phaser-compatible API)
     │   └── Services.js             # service locator
     ├── entities/
     │   ├── Player.js               # state machine: RUN, JUMP, DOUBLE_JUMP, FALL, SLIDE, CRASH
-    │   ├── ObstaclePool.js         # stumps, rocks, roots, logs, brambles, low branches, pits
-    │   └── CollectiblePool.js      # Pop Coins, Tickets, Super Magnet
+    │   ├── ObstaclePool.js         # 3D lane hazards: stumps, rocks, logs, brambles, gates, toadstool houses
+    │   ├── CollectiblePool.js      # coins, tickets, magnets, item boxes, boost pads, letters
+    │   └── World3D.js              # depth sorting + billboard placement
     ├── art/
-    │   ├── CharacterRenderer.js    # Canvas-2D Labubu + accessories in every pose
+    │   ├── CharacterRenderer.js    # Canvas-2D Labubu + accessories, front and back views
     │   └── ProceduralTextures.js   # coins, obstacles, blind box, foil, particles, parallax
     └── ui/
         ├── UIKit.js                # buttons, modals, scroll list, currency bar, backdrop
@@ -174,19 +191,16 @@ a few fields:
 that aren't owned or are in the wrong slot, and clamps negative currencies. A corrupt save never
 crashes the game.
 
-### Runner (`RunnerScene` + `Player`)
+### Runner (`RunnerScene` + `Player` + pools)
 
-- Arcade physics with gravity 1200. The player stays at a fixed x and the world scrolls past.
-- `speed = min(800, 300 + distanceMeters * 0.15)`, where 20 px = 1 m.
-- Parallax layers: sky, clouds (0.04), snowy mountains (0.08), hills with mushroom houses (0.18), forest canopy (0.38), the path (1.0), and foreground grass in front of the runner (1.35). The sky shifts to sunset at 1.5 km and to night at 3 km.
-- The visible runner sprite is separate from its physics body, so squash-and-stretch, lean, flips and after-images never change the hitbox.
-- Obstacles unlock gradually: stumps, rocks and roots from the start, low branches (slide) at 120 m, pit traps at 200 m, logs at 250 m, brambles at 350 m.
-- Objects come from pools. Off-screen obstacles and pickups are deactivated and reused, never destroyed. Pickups are plain pooled images that use a circle-vs-rectangle test, which stays cheap with 100+ coins on screen.
+- `Player` is a small state machine (RUN / JUMP / FALL / DUCK / CRASH), simulated in metres: lane x, height y, gravity 34 m/s². Squash and stretch, lean, cartwheels, star rainbow and after-images are visual only.
+- `ObstaclePool` and `CollectiblePool` pool billboards at depth z and recycle them once they pass the camera. Collisions are lane/height/depth overlap tests.
+- Rows are placed at absolute track positions, so the road is already full to the horizon when the run starts. Every row leaves a passable lane.
+- All gameplay timers (rolls, boosts, magnet, star) run on a game clock that advances with the same capped frame delta as the world. They stay fair when a phone drops frames.
 - Perks from the loadout:
-  - `beaver_paddle_tail`: triple jump (everyone has a double jump), and gravity is 35% lower while you hold jump on the way down.
-  - `lumberjack_vest`: coin attraction radius +150 px.
-  - `beaver_labubu_secret` (the "secret beaver chase"): a 1-hit shield each run (it also bounces you out of a pit) and +25% coin value.
-  - Smaller perks on other items: jump boost, idle bonus, ticket luck, lower gravity, coin bonus.
+  - `beaver_paddle_tail`: triple jump (everyone has a double jump), and gravity is 35% lower while you hold on the way down.
+  - `lumberjack_vest`: +3 m coin reach, which pulls in coins from neighbouring lanes.
+  - `beaver_labubu_secret` (the "secret beaver chase"): a 1-hit shield each run and +25% coin value.
 
 ### Gacha (`GachaDropTable` + `GachaSystem` + `UnboxingScene`)
 

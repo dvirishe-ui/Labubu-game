@@ -19,19 +19,21 @@ export class PreloaderScene extends Phaser.Scene {
   }
 
   preload() {
-    this.add.image(WIDTH / 2, HEIGHT / 2, 'bg_sky');
+    const oy = (HEIGHT - 720) / 2; // centre the 720-tall layout in portrait
+    this.oy = oy;
+    this.add.image(0, 0, 'sky3d').setOrigin(0).setDisplaySize(WIDTH, HEIGHT);
     this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, COLORS.bgDark, 0.55);
-    outlinedText(this, WIDTH / 2, 230, 'LABUBU', 96, '#ff8fb1');
-    outlinedText(this, WIDTH / 2, 310, 'Blind Box Run & Collect', 34, '#fff4e6');
-    this.box = this.add.image(WIDTH / 2, 430, 'box_icon').setScale(0.9);
+    outlinedText(this, WIDTH / 2, oy + 230, 'LABUBU', 96, '#ff8fb1');
+    outlinedText(this, WIDTH / 2, oy + 310, 'Blind Box Run & Collect', 34, '#fff4e6');
+    this.box = this.add.image(WIDTH / 2, oy + 430, 'box_icon').setScale(0.9);
     this.tweens.add({ targets: this.box, angle: { from: -6, to: 6 }, yoyo: true, repeat: -1, duration: 300 });
 
-    const barW = 520;
+    const barW = Math.min(520, WIDTH - 80);
     this.barBg = this.add.graphics();
-    this.barBg.fillStyle(0x000000, 0.35).fillRoundedRect(WIDTH / 2 - barW / 2, 540, barW, 30, 15);
+    this.barBg.fillStyle(0x000000, 0.35).fillRoundedRect(WIDTH / 2 - barW / 2, oy + 540, barW, 30, 15);
     this.bar = this.add.graphics();
     this.barW = barW;
-    this.status = this.add.text(WIDTH / 2, 600, 'Stitching fur…', textStyle(22, '#fff4e6')).setOrigin(0.5);
+    this.status = this.add.text(WIDTH / 2, oy + 600, 'Stitching fur…', textStyle(22, '#fff4e6')).setOrigin(0.5);
 
     // Hook for any future file-based assets: they would report progress here.
     this.load.on('progress', (v) => this.setProgress(v * 0.2));
@@ -39,7 +41,7 @@ export class PreloaderScene extends Phaser.Scene {
 
   setProgress(v) {
     this.bar.clear();
-    this.bar.fillStyle(COLORS.pink, 1).fillRoundedRect(WIDTH / 2 - this.barW / 2 + 4, 544, Math.max(22, (this.barW - 8) * v), 22, 11);
+    this.bar.fillStyle(COLORS.pink, 1).fillRoundedRect(WIDTH / 2 - this.barW / 2 + 4, this.oy + 544, Math.max(22, (this.barW - 8) * v), 22, 11);
   }
 
   create() {

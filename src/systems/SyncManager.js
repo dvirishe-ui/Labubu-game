@@ -66,7 +66,7 @@ export function resolveConflict(local, cloud) {
 
   // Monotonic stats never go backwards.
   let statsRaised = false;
-  for (const key of ['highScore', 'totalRuns', 'boxesOpened', 'coinsCollectedTotal', 'totalDistance']) {
+  for (const key of ['highScore', 'totalRuns', 'boxesOpened', 'coinsCollectedTotal', 'totalDistance', 'bestDistance']) {
     const best = Math.max(base.stats?.[key] || 0, other.stats?.[key] || 0);
     if (best !== (base.stats?.[key] || 0)) statsRaised = true;
     base.stats[key] = best;

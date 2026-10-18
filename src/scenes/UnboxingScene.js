@@ -20,8 +20,6 @@ import { pullBlindBox } from '../systems/GachaSystem.js';
 import { bakeCharacterFrame, bakePlayerTextures, previewLoadoutFor } from '../art/CharacterRenderer.js';
 import { CurrencyBar, makeButton, makePanel, outlinedText, textStyle } from '../ui/UIKit.js';
 
-const BOX_X = WIDTH / 2;
-const BOX_Y = 400;
 const FOIL_W = 196; // foil texture width
 const FOIL_SCALE = 0.77; // scaled to span the box's front-top edge
 const FOIL_Y = -62; // relative to the box centre
@@ -54,6 +52,9 @@ export class UnboxingScene extends Phaser.Scene {
     bakeCharacterFrame(this, 'reveal_art', previewLoadoutFor(this.result.itemId, equippedDoll), 'wave', 2);
 
     Services.audio.stopMusic();
+    this.portrait = HEIGHT > WIDTH;
+    this.BX = WIDTH / 2;
+    this.BY = this.portrait ? Math.round(HEIGHT * 0.42) : 400;
     this.buildStage();
     this.currencyBar = new CurrencyBar(this, 20, 16);
     this.cameras.main.fadeIn(200, 20, 12, 30);
@@ -73,17 +74,17 @@ export class UnboxingScene extends Phaser.Scene {
   // -------------------------------------------------------------------------- stage
 
   buildStage() {
-    this.add.image(WIDTH / 2, HEIGHT / 2, 'bg_sky').setTint(0x6b4f8a);
+    this.add.image(0, 0, 'sky3d').setOrigin(0).setDisplaySize(WIDTH, HEIGHT).setTint(0x6b4f8a);
     this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x1a1024, 0.72);
     // Spotlight
-    this.spot = this.add.image(BOX_X, BOX_Y, 'fx_glow').setScale(3.2).setAlpha(0.25).setTint(0xffe3ec);
-    this.shadow = this.add.ellipse(BOX_X, BOX_Y + 140, 300, 50, 0x000000, 0.35);
+    this.spot = this.add.image(this.BX, this.BY, 'fx_glow').setScale(3.2).setAlpha(0.25).setTint(0xffe3ec);
+    this.shadow = this.add.ellipse(this.BX, this.BY + 140, 300, 50, 0x000000, 0.35);
 
-    this.rays = this.add.image(BOX_X, BOX_Y - 40, 'fx_rays').setAlpha(0).setScale(0.4).setBlendMode(Phaser.BlendModes.ADD);
-    this.glow = this.add.image(BOX_X, BOX_Y - 20, 'fx_glow').setAlpha(0).setScale(1.5).setBlendMode(Phaser.BlendModes.ADD);
+    this.rays = this.add.image(this.BX, this.BY - 40, 'fx_rays').setAlpha(0).setScale(0.4).setBlendMode(Phaser.BlendModes.ADD);
+    this.glow = this.add.image(this.BX, this.BY - 20, 'fx_glow').setAlpha(0).setScale(1.5).setBlendMode(Phaser.BlendModes.ADD);
 
     // The box is a container: body + foil strip so they shake together.
-    this.box = this.add.container(BOX_X, -260);
+    this.box = this.add.container(this.BX, -260);
     this.boxImg = this.add.image(0, 0, 'box_closed');
     this.foil = this.add.image(-90, FOIL_Y, 'foil_strip').setOrigin(0, 0.5).setScale(FOIL_SCALE, 0.9);
     this.box.add([this.boxImg, this.foil]);
@@ -107,7 +108,7 @@ export class UnboxingScene extends Phaser.Scene {
 
   /** Phase 1: bounce in. */
   async dropBox() {
-    await this.tween({ targets: this.box, y: BOX_Y, duration: 900, ease: 'Bounce.easeOut' });
+    await this.tween({ targets: this.box, y: this.BY, duration: 900, ease: 'Bounce.easeOut' });
     Services.audio.play('boxDrop');
     this.cameras.main.shake(120, 0.004);
     this.startTearPhase();
@@ -121,8 +122,8 @@ export class UnboxingScene extends Phaser.Scene {
     this.tweens.add({ targets: [this.prompt, this.subPrompt], alpha: 1, duration: 300 });
 
     // Animated hint finger
-    this.hint = outlinedText(this, BOX_X - 90, BOX_Y + FOIL_Y - 46, '➜', 54, '#ff8fb1');
-    this.tweens.add({ targets: this.hint, x: BOX_X + 60, duration: 900, repeat: -1, ease: 'Sine.easeInOut', repeatDelay: 300 });
+    this.hint = outlinedText(this, this.BX - 90, this.BY + FOIL_Y - 46, '➜', 54, '#ff8fb1');
+    this.tweens.add({ targets: this.hint, x: this.BX + 60, duration: 900, repeat: -1, ease: 'Sine.easeInOut', repeatDelay: 300 });
 
     let last = null;
     let downAt = null;
@@ -144,7 +145,7 @@ export class UnboxingScene extends Phaser.Scene {
       last = null;
       downAt = null;
     });
-    this.input.keyboard?.on('keydown-SPACE', () => this.phase === 'tear' && this.advanceTear(0.25, BOX_X, BOX_Y + FOIL_Y));
+    this.input.keyboard?.on('keydown-SPACE', () => this.phase === 'tear' && this.advanceTear(0.25, this.BX, this.BY + FOIL_Y));
   }
 
   advanceTear(amount, px, py) {
@@ -192,12 +193,12 @@ export class UnboxingScene extends Phaser.Scene {
       await this.tween({
         targets: this.box,
         angle: { from: -4 * level, to: 4 * level },
-        x: { from: BOX_X - 6 * level, to: BOX_X + 6 * level },
+        x: { from: this.BX - 6 * level, to: this.BX + 6 * level },
         yoyo: true,
         repeat: 2,
         duration: 55
       });
-      this.box.setAngle(0).setX(BOX_X);
+      this.box.setAngle(0).setX(this.BX);
       await this.wait(level === 3 ? 450 : 380);
     }
   }
@@ -261,9 +262,10 @@ export class UnboxingScene extends Phaser.Scene {
 
     // Figure rises
     this.figure = this.add.image(this.box.x, this.box.y - 60, 'reveal_art').setScale(0.25).setAlpha(0);
-    this.tweens.add({ targets: this.box, y: BOX_Y + 260, alpha: 0, duration: 700, delay: 250, ease: 'Cubic.easeIn' });
-    await this.tween({ targets: this.figure, y: 360, scale: 1.25, alpha: 1, duration: 750, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: this.figure, y: 345, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: this.box, y: this.BY + 260, alpha: 0, duration: 700, delay: 250, ease: 'Cubic.easeIn' });
+    const figY = this.portrait ? this.BY - 30 : 360;
+    await this.tween({ targets: this.figure, y: figY, scale: 1.25, alpha: 1, duration: 750, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: this.figure, y: figY - 15, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     if (rarity === 'secret') {
       const banner = outlinedText(this, WIDTH / 2, 90, '★ SECRET CHASE ★', 52, '#ffc93c').setScale(0);
@@ -286,9 +288,21 @@ export class UnboxingScene extends Phaser.Scene {
 
     // Slide the figure left to make room for the card.
     const slideLeft = [this.figure, this.rays, this.glow, this.spot, this.banner].filter(Boolean);
-    this.tweens.add({ targets: slideLeft, x: (WIDTH - 580) / 2 + 30, duration: 450, ease: 'Cubic.easeInOut' });
+    let cardX = WIDTH - 580;
+    let cardY = 0;
+    if (this.portrait) {
+      // Portrait: figure moves up, card slides in underneath.
+      const topY = Math.round(HEIGHT * 0.25);
+      this.tweens.killTweensOf(this.figure);
+      this.tweens.add({ targets: [this.figure, this.rays, this.glow, this.spot], y: topY, duration: 450, ease: 'Cubic.easeInOut' });
+      this.tweens.add({ targets: this.figure, scale: 0.95, duration: 450 });
+      cardX = (WIDTH - 520) / 2;
+      cardY = Math.round(HEIGHT * 0.43) - 90;
+    } else {
+      this.tweens.add({ targets: slideLeft, x: (WIDTH - 580) / 2 + 30, duration: 450, ease: 'Cubic.easeInOut' });
+    }
 
-    const card = this.add.container(WIDTH + 400, 0);
+    const card = this.add.container(WIDTH + 400, cardY);
     const x0 = 0;
     const panel = makePanel(this, x0, 90, 520, 560, { radius: 26 });
     const ribbon = this.add.graphics();
@@ -327,7 +341,7 @@ export class UnboxingScene extends Phaser.Scene {
         })
       );
     }
-    this.tweens.add({ targets: card, x: WIDTH - 580, duration: 500, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: card, x: cardX, duration: 500, ease: 'Back.easeOut' });
   }
 
   equipNow() {
@@ -349,7 +363,7 @@ export class UnboxingScene extends Phaser.Scene {
   skip() {
     if (this.phase === 'drop' || this.phase === 'tear') {
       this.tweens.killTweensOf(this.box);
-      this.box.setPosition(BOX_X, BOX_Y);
+      this.box.setPosition(this.BX, this.BY);
       this.hint?.destroy();
       this.tweens.killTweensOf([this.prompt, this.subPrompt]);
       this.prompt.setAlpha(0);

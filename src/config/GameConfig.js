@@ -5,94 +5,122 @@
  */
 
 /**
- * Logical resolution. Height is fixed at 720; width follows the device's
- * landscape aspect ratio (16:9 up to ~20:9 phones) so the game fills the whole
- * screen instead of showing black bars. Layouts anchor to WIDTH, never to 1280.
+ * Logical viewport. The short side of the screen is always 720 logical px and
+ * the long side follows the device's aspect ratio (1280..1600), in PORTRAIT or
+ * LANDSCAPE - whichever way the phone is held - so the game always fills the
+ * whole screen. These are live bindings: main.js calls updateViewport() when
+ * the device rotates, and every scene reads WIDTH / HEIGHT inside create().
  */
-export const HEIGHT = 720;
-export const MIN_WIDTH = 1280;
-export const MAX_WIDTH = 1600;
+export const SHORT_SIDE = 720;
+export const MIN_LONG_SIDE = 1280;
+export const MAX_LONG_SIDE = 1600;
 
-function screenDims() {
-  if (typeof window === 'undefined') return null;
-  const w = window.innerWidth || 1280;
-  const h = window.innerHeight || 720;
-  // Measure as landscape even if the phone is currently held upright.
-  return { long: Math.max(w, h), short: Math.min(w, h), dpr: window.devicePixelRatio || 1 };
+/** Pure viewport maths (unit-testable): window size + DPR -> logical size & render scale. */
+export function computeViewport(innerW = 1280, innerH = 720, dpr = 1) {
+  const portrait = innerH > innerW;
+  const long = Math.max(innerW, innerH);
+  const short = Math.min(innerW, innerH);
+  let longSide = Math.round((SHORT_SIDE * long) / short);
+  longSide = Math.min(MAX_LONG_SIDE, Math.max(MIN_LONG_SIDE, longSide - (longSide % 2)));
+  // Render resolution: canvas = logical x RES, cameras zoom by RES (ui/Display.js).
+  const res = Math.round(Math.min(1.5, Math.max(1, (short * dpr) / SHORT_SIDE)) * 4) / 4;
+  return {
+    width: portrait ? SHORT_SIDE : longSide,
+    height: portrait ? longSide : SHORT_SIDE,
+    portrait,
+    res
+  };
 }
 
-function computeWidth() {
-  const d = screenDims();
-  if (!d) return MIN_WIDTH;
-  const w = Math.round((HEIGHT * d.long) / d.short);
-  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w - (w % 2)));
-}
+export let WIDTH = 1280;
+export let HEIGHT = 720;
+export let PORTRAIT = false;
+export let RES = 1;
 
-/**
- * Render resolution multiplier. The canvas is rendered at WIDTH x HEIGHT x RES
- * and every camera zooms by RES, so text, UI and character art stay razor
- * sharp on high-DPI phones instead of being upscaled by the browser.
- */
-function computeRes() {
-  const d = screenDims();
-  if (!d) return 1;
-  const physical = d.short * d.dpr;
-  return Math.round(Math.min(1.5, Math.max(1, physical / HEIGHT)) * 4) / 4;
+/** Recomputes the viewport from the window. Returns true if the logical size changed. */
+export function updateViewport() {
+  if (typeof window === 'undefined') return false;
+  const v = computeViewport(window.innerWidth || 1280, window.innerHeight || 720, window.devicePixelRatio || 1);
+  const changed = v.width !== WIDTH || v.height !== HEIGHT;
+  WIDTH = v.width;
+  HEIGHT = v.height;
+  PORTRAIT = v.portrait;
+  // RES is fixed at boot: changing it would require re-baking every texture.
+  return changed;
 }
-
-export const WIDTH = computeWidth();
-export const RES = computeRes();
+if (typeof window !== 'undefined') {
+  updateViewport();
+  RES = computeViewport(window.innerWidth || 1280, window.innerHeight || 720, window.devicePixelRatio || 1).res;
+}
 
 export const STORAGE_KEY = 'labubu_blindbox_save_v1';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
-/** Runner physics and pacing. */
+/**
+ * 3D lane runner tuning. World units are metres; the camera sits behind the
+ * runner and everything is projected onto the screen (see RunnerScene.project).
+ */
 export const RUNNER = {
-  GRAVITY: 1200,
-  GROUND_Y: 610, // y of the running surface (top of the ground strip)
-  PLAYER_X: 260,
-  JUMP_VELOCITY: -640,
-  DOUBLE_JUMP_VELOCITY: -560,
-  FAST_FALL_VELOCITY: 900, // swipe down while airborne slams you to the ground
-  FLOATY_GRAVITY_FACTOR: 0.65, // beaver tail: -35% gravity while falling & holding jump
-  SLIDE_DURATION_MS: 380, // minimum duck time (holding keeps ducking)
+  LANES: [-2.1, 0, 2.1], // lane centres (x, metres)
+  LANE_SWITCH_MS: 150,
+  PLAYER_Z: 5, // distance from camera to the runner
+  DRAW_DISTANCE: 140, // objects spawn this far ahead of the runner
+  GRAVITY: 34, // m/s^2
+  JUMP_VELOCITY: 11, // -> ~1.8 m jump
+  AIR_JUMP_VELOCITY: 9.5,
+  FAST_FALL_VELOCITY: -22,
+  FLOATY_GRAVITY_FACTOR: 0.6, // Beaver Tail glide while holding
+  PLAYER_HEIGHT: 1.7,
+  DUCK_HEIGHT: 0.75,
+  ROLL_MS: 520, // a duck/roll lasts this long (holding keeps rolling)
 
-  BASE_SPEED: 300, // px / second
-  SPEED_PER_METER: 0.15, // speed = base + distance * 0.15
-  MAX_SPEED: 800,
-  PIXELS_PER_METER: 20,
+  BASE_SPEED: 16, // m/s - brisk from the first second
+  SPEED_PER_METER: 0.011, // speed ramps with distance...
+  MAX_SPEED: 34, // ...up to this
 
-  BASE_ATTRACT_RADIUS: 40, // coins inside this radius fly to the player
-  SUPER_MAGNET_RADIUS: 420,
+  MULTIPLIER_EVERY_M: 300, // score multiplier +1 every 300 m...
+  MAX_MULTIPLIER: 6, // ...up to x6
+
+  ATTRACT_DIST: 1.2, // coin pickup reach (m); lumberjack vest adds more
+  SUPER_MAGNET_RANGE: 9,
   SUPER_MAGNET_DURATION_MS: 8000,
   COIN_VALUE: 1,
 
   // Mario Kart-style extras
-  COUNTDOWN_STEP_MS: 650, // 3 - 2 - 1 - GO!
+  COUNTDOWN_STEP_MS: 600, // 3 - 2 - 1 - GO!
   ROCKET_WINDOW_MS: 260, // tap within this of "GO!" for a rocket start
-  ROCKET_BOOST: { ms: 1800, mult: 1.7 },
-  PAD_BOOST: { ms: 1400, mult: 1.45 },
-  MUSHROOM_BOOST: { ms: 2300, mult: 1.65 },
+  ROCKET_BOOST: { ms: 1800, mult: 1.6 },
+  PAD_BOOST: { ms: 1400, mult: 1.4 },
+  MUSHROOM_BOOST: { ms: 2300, mult: 1.6 },
   STAR_MS: 6000,
   STAR_SPEED_MULT: 1.15,
   COMBO_WINDOW_MS: 700, // coins collected within this window chain a combo
-  CLOSE_CALL_PX: 30, // clearing an obstacle by less than this = close call
+  CLOSE_CALL_M: 0.35, // clearing an obstacle by less than this = close call
   REVIVE_TICKET_COST: 1,
   REVIVE_PROMPT_MS: 5000,
-  DUCK_ZONE: 0.38, // left share of the screen that ducks on touch
-  SLIDE_TAP_PX: 210, // a tap-duck lasts at least this much ground travel
+  LETTER_EVERY_M: 320, // a L-A-B-U-B-U letter appears about this often
 
   DISTANCE_TICK_METERS: 10, // EVENT_DISTANCE_TICK fires every N meters
-  MIN_OBSTACLE_GAP: 420, // px, scaled up with speed
-  INVULNERABLE_AFTER_SHIELD_MS: 1200
+  INVULNERABLE_AFTER_SHIELD_MS: 1300
 };
 
-/** Parallax scroll factors relative to the running surface. */
-export const PARALLAX = {
-  SKY: 0.08,
-  CANOPY: 0.35,
-  GROUND: 1
+/** Word hunt: collect these letters during runs for a daily prize. */
+export const WORD_HUNT = {
+  WORD: 'LABUBU',
+  REWARD: { popCoins: 300, blindBoxTickets: 1 }
 };
+
+/** Daily Lucky Spin wheel segments (weights are relative). */
+export const LUCKY_SPIN = [
+  { label: '50', reward: { type: 'popCoins', amount: 50 }, weight: 26, color: 0xffc93c },
+  { label: '1 Ticket', reward: { type: 'blindBoxTickets', amount: 1 }, weight: 16, color: 0xff8fb1 },
+  { label: '100', reward: { type: 'popCoins', amount: 100 }, weight: 20, color: 0x6ee7a8 },
+  { label: '2 Tickets', reward: { type: 'blindBoxTickets', amount: 2 }, weight: 6, color: 0x59b8ff },
+  { label: '200', reward: { type: 'popCoins', amount: 200 }, weight: 12, color: 0xb07cff },
+  { label: 'Key!', reward: { type: 'goldenKeys', amount: 1 }, weight: 4, color: 0xff7a1a },
+  { label: '75', reward: { type: 'popCoins', amount: 75 }, weight: 22, color: 0x8fd3ff },
+  { label: '500', reward: { type: 'popCoins', amount: 500 }, weight: 3, color: 0xe8324b }
+];
 
 /** Gacha economy. */
 export const ECONOMY = {

@@ -1,45 +1,42 @@
 /**
  * ObstaclePool.js
- * Object pool for every hazard on the trail. Physical obstacles (stumps,
- * rocks, logs, brambles, roots, low branches) share one Arcade group whose
- * members are recycled; pit traps are plain images (no body) because they are
- * resolved by RunnerScene against the ground collider.
+ * Object pool for the 3D lane runner's hazards. Every obstacle lives in one
+ * lane at a depth z (metres ahead of the camera) and is drawn as a scaled
+ * billboard with a soft contact shadow. Obstacles that pass behind the camera
+ * are deactivated and reused, never destroyed.
  *
- * Nothing is ever destroyed during a run: when an obstacle scrolls off the
- * left edge it is deactivated, hidden and its body disabled, ready for reuse.
+ * Kinds:
+ *  - 'jump' : low hazard (stump, rock, bramble, log) - jump over or change lane
+ *  - 'duck' : gate with a bar overhead - roll under or change lane
+ *  - 'wall' : giant toadstool house - change lane
  */
-import { WIDTH } from '../config/GameConfig.js';
+import { RUNNER } from '../config/GameConfig.js';
+import { depthFor, placeBillboard } from './World3D.js';
 
 /**
- * Obstacle archetypes. `hitbox` is in texture pixels (forgiving, smaller than
- * the art). `minMeters` gates when a type may start spawning.
+ * Archetypes in world metres. `w` = collision width, `h` = collision height
+ * ('jump'/'wall'), `clear`/`top` = bar span for 'duck', `d` = depth, `drawH` =
+ * billboard height, `minMeters` = when it starts appearing.
  */
 export const OBSTACLE_TYPES = {
-  stump: { texture: 'obs_stump', kind: 'ground', hitbox: { w: 50, h: 46, x: 13, y: 20 }, minMeters: 0, weight: 3 },
-  rock: { texture: 'obs_rock', kind: 'ground', hitbox: { w: 52, h: 36, x: 9, y: 14 }, minMeters: 0, weight: 3 },
-  root: { texture: 'obs_root', kind: 'ground', hitbox: { w: 76, h: 16, x: 10, y: 12 }, minMeters: 0, weight: 2 },
-  low_branch: { texture: 'obs_branch', kind: 'overhead', clearance: 64, hitbox: { w: 116, h: 540, x: 22, y: 0 }, minMeters: 120, weight: 2 },
-  log: { texture: 'obs_log', kind: 'ground', hitbox: { w: 100, h: 32, x: 14, y: 12 }, minMeters: 250, weight: 2 },
-  bramble: { texture: 'obs_bramble', kind: 'ground', hitbox: { w: 90, h: 38, x: 13, y: 18 }, minMeters: 350, weight: 2 },
-  pit: { texture: 'obs_pit', kind: 'pit', width: 180, minMeters: 200, weight: 2 }
+  stump: { texture: 'obs_stump', kind: 'jump', w: 1.4, h: 0.95, d: 0.9, drawH: 1.25, minMeters: 0, weight: 3 },
+  rock: { texture: 'obs_rock', kind: 'jump', w: 1.4, h: 0.85, d: 0.9, drawH: 1.1, minMeters: 0, weight: 3 },
+  bramble: { texture: 'obs_bramble', kind: 'jump', w: 1.8, h: 0.9, d: 1.0, drawH: 1.0, minMeters: 150, weight: 2 },
+  log: { texture: 'obs_log', kind: 'jump', w: 1.9, h: 0.75, d: 1.0, drawH: 0.85, minMeters: 60, weight: 2 },
+  gate: { texture: 'obs_gate', kind: 'duck', w: 2.0, clear: 1.05, top: 1.75, d: 0.6, drawH: 2.05, minMeters: 80, weight: 3 },
+  tower: { texture: 'obs_tower', kind: 'wall', w: 1.9, h: 3.0, d: 1.6, drawH: 3.0, minMeters: 40, weight: 3 }
 };
 
 export class ObstaclePool {
-  /**
-   * @param {Phaser.Scene} scene
-   * @param {number} groundY
-   */
-  constructor(scene, groundY) {
+  constructor(scene) {
     this.scene = scene;
-    this.groundY = groundY;
-    this.group = scene.physics.add.group({ allowGravity: false, immovable: true, maxSize: 24 });
-    this.pits = [];
-    this.pitPool = [];
+    this.active = [];
+    this.free = [];
   }
 
-  /** Picks a weighted random type among those unlocked at `meters`. */
-  randomType(meters) {
-    const types = Object.entries(OBSTACLE_TYPES).filter(([, t]) => meters >= t.minMeters);
+  /** Weighted random type unlocked at `meters`, optionally restricted to kinds. */
+  randomType(meters, kinds = null) {
+    const types = Object.entries(OBSTACLE_TYPES).filter(([, t]) => meters >= t.minMeters && (!kinds || kinds.includes(t.kind)));
     const total = types.reduce((s, [, t]) => s + t.weight, 0);
     let r = Math.random() * total;
     for (const [key, t] of types) {
@@ -49,137 +46,77 @@ export class ObstaclePool {
     return types[0][0];
   }
 
-  /**
-   * Activates a pooled obstacle of `type` at screen x.
-   * @returns {{ type: string, width: number, left: number, right: number, top: number }} spawn footprint
-   */
-  spawn(type, x) {
+  /** Activates a pooled obstacle of `type` in `lane` at depth `z`. */
+  spawn(type, lane, z) {
     const def = OBSTACLE_TYPES[type];
-    if (def.kind === 'pit') return this.spawnPit(x);
-
-    const sprite = this.group.get(x, this.groundY, def.texture);
-    if (!sprite) return null; // pool exhausted: skip this spawn
-    sprite.setTexture(def.texture).setOrigin(0.5, 1).setActive(true).setVisible(true).setDepth(15).setAlpha(1).setAngle(0);
-    sprite.obstacleType = type;
-    sprite.dodged = false;
-    sprite.passed = false;
-    sprite.hitDone = false;
-
-    let y = this.groundY + 2;
-    if (def.kind === 'overhead') {
-      // Bottom of the hitbox sits `clearance` px above the ground.
-      const below = sprite.height - (def.hitbox.y + def.hitbox.h);
-      y = this.groundY - def.clearance + below;
+    let o = this.free.pop();
+    if (!o) {
+      o = {
+        img: this.scene.add.image(0, 0, def.texture).setOrigin(0.5, 1),
+        shadow: this.scene.add.image(0, 0, 'fx_shadow')
+      };
     }
-    sprite.setPosition(x, y);
-    const body = sprite.body;
-    body.enable = true;
-    body.moves = false; // we scroll obstacles manually, in sync with the ground
-    body.setSize(def.hitbox.w, def.hitbox.h, false);
-    body.setOffset(def.hitbox.x, def.hitbox.y);
-    body.updateFromGameObject();
-
-    // Soft contact shadow grounds the obstacle on the path.
-    if (!sprite.shadowFx) sprite.shadowFx = this.scene.add.ellipse(0, 0, 100, 16, 0x2a1830, 0.28).setDepth(14);
-    sprite.shadowFx.setPosition(x, this.groundY + 3).setScale((def.hitbox.w + 24) / 100, 1).setVisible(def.kind === 'ground');
-    return { type, width: sprite.width, left: x - sprite.width / 2, right: x + sprite.width / 2, top: y - sprite.height };
-  }
-
-  spawnPit(x) {
-    const img = this.pitPool.pop() || this.scene.add.image(0, 0, 'obs_pit').setOrigin(0, 0);
-    img.setPosition(x, this.groundY - 4).setActive(true).setVisible(true).setDepth(6);
-    img.dodged = false;
-    img.obstacleType = 'pit';
-    this.pits.push(img);
-    return { type: 'pit', width: OBSTACLE_TYPES.pit.width, left: x, right: x + OBSTACLE_TYPES.pit.width, top: this.groundY };
-  }
-
-  /** Horizontal fall-through zone of a pit (a bit narrower than the art). */
-  pitBounds(pit) {
-    return { left: pit.x + 18, right: pit.x + OBSTACLE_TYPES.pit.width - 18 };
-  }
-
-  /** Returns the pit under `x`, if any. */
-  pitAt(x) {
-    for (const pit of this.pits) {
-      const b = this.pitBounds(pit);
-      if (x > b.left && x < b.right) return pit;
-    }
-    return null;
+    o.img.setTexture(def.texture).setVisible(true).setAngle(0).setAlpha(1).clearTint();
+    o.shadow.setVisible(true);
+    Object.assign(o, { type, def, lane, x: RUNNER.LANES[lane], z, hitDone: false, passed: false, smashed: false, smashT: 0 });
+    this.active.push(o);
+    return o;
   }
 
   /**
-   * Scrolls everything left by `dx`, recycles what left the screen and calls
-   * `onDodged(type)` once per obstacle that fully passed `playerX`.
+   * Moves obstacles toward the camera by `dz` metres, renders them and fires
+   * `onPass(o)` once each obstacle passes the runner. Returns nothing.
    */
-  update(dx, playerX, onDodged, onPass) {
-    this.group.children.iterate((o) => {
-      if (!o || !o.active) return;
-      o.x -= dx;
-      if (o.shadowFx) o.shadowFx.x = o.x;
-      if (!o.passed && !o.hitDone && o.x <= playerX) {
+  update(dz, dt, onPass) {
+    const scene = this.scene;
+    for (let i = this.active.length - 1; i >= 0; i--) {
+      const o = this.active[i];
+      o.z -= dz;
+      if (!o.passed && o.z < RUNNER.PLAYER_Z - o.def.d / 2 - 0.4) {
         o.passed = true;
         onPass?.(o);
       }
-      if (!o.dodged && !o.hitDone && o.x + o.width / 2 < playerX - 30) {
-        o.dodged = true;
-        onDodged?.(o.obstacleType);
+      if (o.z < 0.7) {
+        this.recycle(i);
+        continue;
       }
-      if (o.x + o.width / 2 < -40) this.recycle(o);
-    });
-    for (let i = this.pits.length - 1; i >= 0; i--) {
-      const pit = this.pits[i];
-      pit.x -= dx;
-      if (!pit.dodged && !pit.fellIn && pit.x + OBSTACLE_TYPES.pit.width < playerX - 30) {
-        pit.dodged = true;
-        onDodged?.('pit');
+      let y = 0;
+      if (o.smashed) {
+        // Smashed obstacles fly up and spin away.
+        o.smashT += dt;
+        y = o.smashT * 9 - o.smashT * o.smashT * 20;
+        o.img.setAngle(o.smashT * 540);
+        o.img.setAlpha(Math.max(0, 1 - o.smashT * 1.5));
+        o.x += dt * (o.x >= 0 ? 6 : -6);
       }
-      if (pit.x + OBSTACLE_TYPES.pit.width < -40) {
-        pit.setActive(false).setVisible(false);
-        pit.fellIn = false;
-        this.pits.splice(i, 1);
-        this.pitPool.push(pit);
-      }
+      placeBillboard(scene, o.img, o.x, y, o.z, o.def.drawH, o.img.height);
+      const g = scene.project(o.x, 0, o.z);
+      const sw = ((o.def.w + 0.6) * g.s) / 128;
+      o.shadow.setPosition(g.x, g.y).setScale(sw, sw).setDepth(depthFor(o.z) - 0.5).setAlpha(o.smashed ? 0 : o.img.alpha * 0.9);
     }
   }
 
-  /** Returns an obstacle to the pool. */
-  recycle(o) {
-    o.shadowFx?.setVisible(false);
-    o.body.enable = false;
-    this.group.killAndHide(o);
-  }
-
-  /** Shatters an obstacle that a shield absorbed. */
+  /** Plays the "plowed through" animation (star / dash / shield). */
   smash(o) {
     o.hitDone = true;
-    o.shadowFx?.setVisible(false);
-    o.body.enable = false;
-    this.scene.tweens.add({
-      targets: o,
-      alpha: 0,
-      angle: 40,
-      y: o.y - 60,
-      duration: 300,
-      onComplete: () => this.recycle(o)
-    });
+    o.smashed = true;
+    o.smashT = 0;
   }
 
-  /** Right-most occupied x (used to keep spawns from overlapping). */
-  rightEdge() {
-    let edge = -Infinity;
-    this.group.children.iterate((o) => {
-      if (o?.active) edge = Math.max(edge, o.x + o.width / 2);
-    });
-    for (const pit of this.pits) edge = Math.max(edge, pit.x + OBSTACLE_TYPES.pit.width);
-    return edge === -Infinity ? WIDTH : edge;
+  recycle(i) {
+    const o = this.active[i];
+    o.img.setVisible(false);
+    o.shadow.setVisible(false);
+    this.active.splice(i, 1);
+    this.free.push(o);
   }
 
   clear() {
-    this.group.children.iterate((o) => o?.active && this.recycle(o));
-    for (const pit of this.pits) pit.setVisible(false).setActive(false);
-    this.pitPool.push(...this.pits);
-    this.pits = [];
+    for (let i = this.active.length - 1; i >= 0; i--) this.recycle(i);
+  }
+
+  /** Removes obstacles closer than `z` (used by revive to give breathing room). */
+  clearNear(z) {
+    for (let i = this.active.length - 1; i >= 0; i--) if (this.active[i].z < z) this.recycle(i);
   }
 }
-

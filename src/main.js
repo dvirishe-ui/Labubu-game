@@ -4,7 +4,7 @@
  * audio), wires app-lifecycle hooks for mobile, and boots Phaser.
  */
 import Phaser from 'phaser';
-import { WIDTH, HEIGHT, RES, RUNNER, COLORS } from './config/GameConfig.js';
+import { WIDTH, HEIGHT, RES, COLORS, updateViewport } from './config/GameConfig.js';
 import { DisplayPlugin } from './ui/Display.js';
 import { Services } from './systems/Services.js';
 import { EventBus } from './systems/EventBus.js';
@@ -62,12 +62,6 @@ function initLifecycle() {
       Services.bus.emit('app:resume');
     }
   });
-  // Portrait phones see a "rotate your device" overlay (index.html): pause runs.
-  const portrait = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
-  portrait.addEventListener?.('change', (e) => {
-    if (e.matches) Services.bus.emit('app:pause');
-  });
-
   window.addEventListener('pagehide', () => {
     Services.save.flush();
     Services.save.touchOnline();
@@ -88,21 +82,40 @@ const config = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  physics: {
-    default: 'arcade',
-    arcade: { gravity: { x: 0, y: RUNNER.GRAVITY }, debug: false }
-  },
   input: { activePointers: 4 },
   plugins: { scene: [{ key: 'DisplayPlugin', plugin: DisplayPlugin, mapping: 'display' }] },
   render: { antialias: true, powerPreference: 'high-performance' },
-  // Phaser caps frame delta at 1000/min ms; RunnerScene uses the same cap so the
-  // manually-scrolled world and the Arcade physics step never drift apart.
+  // Phaser caps frame delta at 1000/min ms; RunnerScene uses the same cap.
   fps: { target: 60, min: 10 },
   // UIOverlay is last so it always renders on top of every other scene.
   scene: [BootScene, PreloaderScene, MainMenuScene, RunnerScene, UnboxingScene, ShowroomScene, UIOverlayScene]
 };
 
 const game = new Phaser.Game(config);
+
+/**
+ * Both orientations play full screen. When the phone rotates (or the window is
+ * resized) the logical viewport is recomputed; menu scenes rebuild their
+ * layout, and a running RunnerScene re-projects its 3D view without restarting.
+ */
+let resizeTimer = null;
+function handleViewportChange() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (!updateViewport()) return;
+    // setGameSize (unlike resize) also updates the FIT aspect ratio.
+    game.scale.setGameSize(Math.round(WIDTH * RES), Math.round(HEIGHT * RES));
+    for (const scene of game.scene.getScenes(true)) {
+      const key = scene.scene.key;
+      if (key === 'Boot' || key === 'Preloader') continue;
+      if (typeof scene.onViewportChange === 'function') scene.onViewportChange();
+      else scene.scene.restart();
+    }
+    Services.bus.emit('app:viewport');
+  }, 180);
+}
+window.addEventListener('resize', handleViewportChange);
+window.addEventListener('orientationchange', handleViewportChange);
 
 // Handy for debugging from the devtools console.
 if (import.meta.env.DEV) window.__LABUBU__ = { game, Services };

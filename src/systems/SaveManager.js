@@ -56,6 +56,7 @@ export function createDefaultSave(now = Date.now()) {
       boxesOpened: 0,
       coinsCollectedTotal: 0,
       totalDistance: 0,
+      bestDistance: 0,
       duplicatesPulled: 0
     },
     quests: {
@@ -70,6 +71,8 @@ export function createDefaultSave(now = Date.now()) {
       pullsSinceLastSecret: 0
     },
     settings: { muted: false, music: true },
+    wordHunt: { date: '', collected: [], completed: false },
+    luckySpin: { lastSpinDate: '' },
     runHistory: [],
     meta: {
       updatedAt: now,
@@ -290,12 +293,15 @@ export class SaveManager {
    * Commits a finished run: stats, payouts and a local top-10 history used by
    * the offline leaderboard. Returns `{ isHighScore }`.
    */
-  recordRun({ distance, coins, tickets = 0 }) {
+  recordRun({ distance, coins, tickets = 0, score: runScore }) {
     const d = this.data;
-    const score = Math.floor(distance);
+    const meters = Math.floor(distance);
+    // highScore is the best run SCORE (distance x multiplier); defaults to metres.
+    const score = Math.floor(runScore ?? distance);
     const isHighScore = score > d.stats.highScore;
     d.stats.totalRuns += 1;
-    d.stats.totalDistance += score;
+    d.stats.totalDistance += meters;
+    d.stats.bestDistance = Math.max(d.stats.bestDistance || 0, meters);
     d.stats.coinsCollectedTotal += coins;
     if (isHighScore) d.stats.highScore = score;
     d.currencies.popCoins += coins;

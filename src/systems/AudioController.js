@@ -16,7 +16,7 @@ const MUSIC = {
     bass: [-21, null, null, null, -16, null, null, null, -14, null, null, null, -16, null, null, null]
   },
   run: {
-    bpm: 138,
+    bpm: 156,
     lead: [15, 12, 10, 12, 15, null, 17, 15, 12, 10, 7, 10, 12, null, 10, null],
     bass: [-21, null, -9, null, -16, null, -4, null, -14, null, -2, null, -16, null, -4, null]
   }
@@ -277,6 +277,32 @@ export class AudioController {
   sfx_smash() {
     this.noise({ dur: 0.25, freq: 900, sweepTo: 200, q: 1, vol: 0.3, type: 'lowpass' });
     this.tone({ freq: 400, to: 120, dur: 0.18, type: 'square', vol: 0.12 });
+  }
+
+  sfx_lane() {
+    this.noise({ dur: 0.12, freq: 1800, sweepTo: 600, q: 1.2, vol: 0.12 });
+  }
+  sfx_bump() {
+    this.tone({ freq: 160, to: 90, dur: 0.16, type: 'square', vol: 0.18 });
+    this.noise({ dur: 0.1, freq: 500, vol: 0.15 });
+  }
+  sfx_letter() {
+    this.arpeggio([12, 19, 24, 31], { step: 0.05, type: 'triangle', vol: 0.18, dur: 0.2 });
+  }
+  sfx_wordComplete() {
+    this.arpeggio([0, 4, 7, 12, 16, 19, 24, 28, 31, 36], { step: 0.07, type: 'square', vol: 0.12, dur: 0.25 });
+    this.arpeggio([12, 16, 19, 24], { step: 0.14, type: 'triangle', vol: 0.16, dur: 0.5, delay: 0.75 });
+  }
+  /** Escalating praise jingle: each level climbs a little higher. */
+  sfx_praise(level = 0) {
+    const base = 7 + level * 2;
+    this.arpeggio([base, base + 4, base + 7, base + 12], { step: 0.055, type: 'square', vol: 0.11, dur: 0.16 });
+  }
+  sfx_spinTick() {
+    this.tone({ freq: 1400, dur: 0.025, type: 'square', vol: 0.06 });
+  }
+  sfx_spinWin() {
+    this.arpeggio([0, 7, 12, 16, 19, 24], { step: 0.08, type: 'triangle', vol: 0.2, dur: 0.35 });
   }
 
   sfx_highScore() {

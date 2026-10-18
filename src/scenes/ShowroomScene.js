@@ -7,7 +7,7 @@
  *    appear as rarity-framed silhouettes so players know what to chase.
  */
 import Phaser from 'phaser';
-import { WIDTH, COLORS } from '../config/GameConfig.js';
+import { WIDTH, HEIGHT, COLORS } from '../config/GameConfig.js';
 import { CATALOG, RARITY_TIERS, RARITY_ORDER, describePerks } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
 import { computePerks } from '../systems/PerkCalculator.js';
@@ -22,9 +22,8 @@ const TABS = [
   { slot: 'shoes', label: 'Shoes' }
 ];
 
-// Centre the 1280-wide layout on wider screens.
-const OX = Math.round((WIDTH - 1280) / 2);
-const GRID = { x: 790 + OX, y: 190, cols: 3, cellW: 150, cellH: 162 };
+// Grid inside the wardrobe panel (panel-local coordinates).
+const GRID = { x: 15, y: 100, cols: 3, cellW: 150, cellH: 162 };
 
 export class ShowroomScene extends Phaser.Scene {
   constructor() {
@@ -42,28 +41,47 @@ export class ShowroomScene extends Phaser.Scene {
     new CurrencyBar(this, 20, 16);
     makeButton(this, WIDTH - 100, 42, 'Back', () => this.leave(), { w: 160, h: 54, fontSize: 24, color: COLORS.mint, colorDark: 0x4fb594 });
 
+    // Layout: landscape = preview | stats | wardrobe; portrait = preview +
+    // stats on top, wardrobe (scaled to fit) below.
+    const portrait = HEIGHT > WIDTH;
+    const OX = portrait ? 0 : Math.round((WIDTH - 1280) / 2);
+    const P = portrait
+      ? { hero: [190, 560, 1.0], name: [190, 600], coll: [190, 632], stats: [412, 100], ward: null }
+      : { hero: [250 + OX, 606, 1.3], name: [250 + OX, 660], coll: [250 + OX, 696], stats: [480 + OX, 90], ward: [780 + OX, 90, 1] };
+    if (portrait) {
+      const top = 720;
+      const ws = Math.min((WIDTH - 24) / 480, (HEIGHT - top - 16) / 610);
+      P.ward = [(WIDTH - 480 * ws) / 2, top, ws];
+    }
+
     // Preview
-    this.add.image(250 + OX, 600, 'pedestal');
-    this.preview = this.add.image(250 + OX, 606, 'player_preview').setOrigin(0.5, 1).setScale(1.3);
-    this.tweens.add({ targets: this.preview, scaleY: 1.33, scaleX: 1.28, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.easeInOut' });
-    this.dollName = outlinedText(this, 250 + OX, 660, '', 26, '#fff4e6');
-    this.collectionText = this.add.text(250 + OX, 696, '', textStyle(18, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
+    const [hx, hy, hs] = P.hero;
+    this.add.image(hx, hy - 6, 'pedestal').setScale(hs / 1.3);
+    this.preview = this.add.image(hx, hy, 'player_preview').setOrigin(0.5, 1).setScale(hs);
+    this.previewY = hy;
+    this.tweens.add({ targets: this.preview, scaleY: hs * 1.03, scaleX: hs * 0.98, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.easeInOut' });
+    this.dollName = outlinedText(this, ...P.name, '', 26, '#fff4e6');
+    this.collectionText = this.add.text(...P.coll, '', textStyle(18, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
 
-    // Stats inspector
-    makePanel(this, 480 + OX, 90, 290, 610);
-    this.add.text(625 + OX, 118, 'Stats Inspector', textStyle(24)).setOrigin(0.5);
-    this.statsText = this.add.text(500 + OX, 148, '', textStyle(18, COLORS.text, { lineSpacing: 9 }));
-    this.statsValues = this.add.text(752 + OX, 148, '', textStyle(18, '#3fa98a', { lineSpacing: 9, align: 'right' })).setOrigin(1, 0);
-    this.add.graphics().lineStyle(2, COLORS.panelDark, 0.25).lineBetween(500 + OX, 462, 750 + OX, 462);
-    this.detailTitle = this.add.text(625 + OX, 474, '', textStyle(20, COLORS.text, { align: 'center', wordWrap: { width: 260 } })).setOrigin(0.5, 0);
-    this.detailBody = this.add.text(500 + OX, 508, '', textStyle(15, '#5a4a6a', { wordWrap: { width: 255 }, fontStyle: 'normal', lineSpacing: 2 }));
+    // Stats inspector (panel-local layout)
+    const st = this.add.container(...P.stats);
+    st.add(makePanel(this, 0, 0, 290, 610));
+    st.add(this.add.text(145, 28, 'Stats Inspector', textStyle(24)).setOrigin(0.5));
+    this.statsText = this.add.text(20, 58, '', textStyle(18, COLORS.text, { lineSpacing: 9 }));
+    this.statsValues = this.add.text(272, 58, '', textStyle(18, '#3fa98a', { lineSpacing: 9, align: 'right' })).setOrigin(1, 0);
+    this.detailTitle = this.add.text(145, 384, '', textStyle(20, COLORS.text, { align: 'center', wordWrap: { width: 260 } })).setOrigin(0.5, 0);
+    this.detailBody = this.add.text(20, 418, '', textStyle(15, '#5a4a6a', { wordWrap: { width: 255 }, fontStyle: 'normal', lineSpacing: 2 }));
+    st.add([this.statsText, this.statsValues, this.add.graphics().lineStyle(2, COLORS.panelDark, 0.25).lineBetween(20, 372, 270, 372), this.detailTitle, this.detailBody]);
+    if (portrait) st.setScale(Math.min(1, (HEIGHT * 0.45) / 610));
 
-    // Wardrobe
-    makePanel(this, 780 + OX, 90, 480, 610);
-    this.tabButtons = TABS.map((tab, i) =>
-      makeButton(this, 830 + OX + i * 95, 135, tab.label, () => this.selectTab(tab.slot), { w: 90, h: 46, fontSize: 17, sound: 'click' })
-    );
+    // Wardrobe (panel-local layout, scaled as one unit)
+    const [wx, wy, ws] = P.ward;
+    this.wardrobe = this.add.container(wx, wy).setScale(ws);
+    this.wardrobe.add(makePanel(this, 0, 0, 480, 610));
+    this.tabButtons = TABS.map((tab, i) => makeButton(this, 50 + i * 95, 45, tab.label, () => this.selectTab(tab.slot), { w: 90, h: 46, fontSize: 17, sound: 'click' }));
+    this.wardrobe.add(this.tabButtons);
     this.grid = this.add.container(0, 0);
+    this.wardrobe.add(this.grid);
 
     this.refreshAll();
     this.cameras.main.fadeIn(220, 43, 29, 58);
@@ -96,7 +114,7 @@ export class ShowroomScene extends Phaser.Scene {
       ['Jump power', `${Math.round(p.jumpMultiplier * 100)}%`],
       ['Air jumps', p.maxJumps === 3 ? 'Triple' : 'Double'],
       ['Glide (hold)', p.floatyFall ? 'Yes' : 'No'],
-      ['Coin magnet', `${p.attractRadius}px`],
+      ['Coin magnet', `${p.attractRadius.toFixed(1)} m`],
       ['Shield', p.shieldCharges ? `${p.shieldCharges} hit` : 'None'],
       ['Coin value', `x${p.coinMultiplier.toFixed(2)}`],
       ['Gravity', `${Math.round(p.gravityMultiplier * 100)}%`],
@@ -179,7 +197,7 @@ export class ShowroomScene extends Phaser.Scene {
     bakePlayerTextures(this, save.data.equipped);
     this.refreshAll();
     this.refreshDetail(item.id);
-    this.tweens.add({ targets: this.preview, y: 570, duration: 150, yoyo: true, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: this.preview, y: this.previewY - 36, duration: 150, yoyo: true, ease: 'Quad.easeOut' });
   }
 
   leave() {
