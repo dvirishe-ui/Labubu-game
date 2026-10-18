@@ -5,12 +5,13 @@
  * here keeps every scene's layout code short and visually consistent.
  */
 import Phaser from 'phaser';
-import { COLORS, FONT, WIDTH, HEIGHT, EVENTS } from '../config/GameConfig.js';
+import { COLORS, FONT, WIDTH, HEIGHT, EVENTS, RES } from '../config/GameConfig.js';
 import { Services } from '../systems/Services.js';
 
 /** Shared text style factory. */
 export function textStyle(size = 24, color = COLORS.text, extra = {}) {
-  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: 'bold', ...extra };
+  // Text is rasterised at RES so it stays crisp under the camera zoom.
+  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: 'bold', resolution: RES, ...extra };
 }
 
 /** Text with a chunky outline - used for titles and HUD numbers. */
@@ -86,7 +87,7 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   c.on('pointerdown', (p) => {
     if (!enabled) return;
     pressed = true;
-    downAt = { x: p.x, y: p.y };
+    downAt = { x: p.x / RES, y: p.y / RES };
     draw(color, colorDark, true);
     txt.y = 2;
     if (iconImg) iconImg.y = 2;
@@ -100,7 +101,7 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   c.on('pointerout', release);
   c.on('pointerup', (p) => {
     if (!enabled || !pressed) return release();
-    const moved = downAt ? Phaser.Math.Distance.Between(p.x, p.y, downAt.x, downAt.y) : 0;
+    const moved = downAt ? Phaser.Math.Distance.Between(p.x / RES, p.y / RES, downAt.x, downAt.y) : 0;
     release();
     if (moved > 14) return; // it was a scroll drag, not a tap
     if (sound) Services.audio?.play(sound);
@@ -274,13 +275,13 @@ export class ScrollList {
     let startScroll = 0;
     this.scroll = 0;
     zone.on('pointerdown', (p) => {
-      startY = p.y;
+      startY = p.y / RES;
       startScroll = this.scroll;
       this.dragging = true;
     });
     this._onMove = (p) => {
       if (!this.dragging || !p.isDown) return;
-      this.setScroll(startScroll + (startY - p.y));
+      this.setScroll(startScroll + (startY - p.y / RES));
     };
     this._onUp = () => (this.dragging = false);
     scene.input.on('pointermove', this._onMove);

@@ -62,6 +62,7 @@ export class ObstaclePool {
     sprite.setTexture(def.texture).setOrigin(0.5, 1).setActive(true).setVisible(true).setDepth(15).setAlpha(1).setAngle(0);
     sprite.obstacleType = type;
     sprite.dodged = false;
+    sprite.passed = false;
     sprite.hitDone = false;
 
     let y = this.groundY + 2;
@@ -77,6 +78,10 @@ export class ObstaclePool {
     body.setSize(def.hitbox.w, def.hitbox.h, false);
     body.setOffset(def.hitbox.x, def.hitbox.y);
     body.updateFromGameObject();
+
+    // Soft contact shadow grounds the obstacle on the path.
+    if (!sprite.shadowFx) sprite.shadowFx = this.scene.add.ellipse(0, 0, 100, 16, 0x2a1830, 0.28).setDepth(14);
+    sprite.shadowFx.setPosition(x, this.groundY + 3).setScale((def.hitbox.w + 24) / 100, 1).setVisible(def.kind === 'ground');
     return { type, width: sprite.width, left: x - sprite.width / 2, right: x + sprite.width / 2, top: y - sprite.height };
   }
 
@@ -107,10 +112,15 @@ export class ObstaclePool {
    * Scrolls everything left by `dx`, recycles what left the screen and calls
    * `onDodged(type)` once per obstacle that fully passed `playerX`.
    */
-  update(dx, playerX, onDodged) {
+  update(dx, playerX, onDodged, onPass) {
     this.group.children.iterate((o) => {
       if (!o || !o.active) return;
       o.x -= dx;
+      if (o.shadowFx) o.shadowFx.x = o.x;
+      if (!o.passed && !o.hitDone && o.x <= playerX) {
+        o.passed = true;
+        onPass?.(o);
+      }
       if (!o.dodged && !o.hitDone && o.x + o.width / 2 < playerX - 30) {
         o.dodged = true;
         onDodged?.(o.obstacleType);
@@ -135,6 +145,7 @@ export class ObstaclePool {
 
   /** Returns an obstacle to the pool. */
   recycle(o) {
+    o.shadowFx?.setVisible(false);
     o.body.enable = false;
     this.group.killAndHide(o);
   }
@@ -142,6 +153,7 @@ export class ObstaclePool {
   /** Shatters an obstacle that a shield absorbed. */
   smash(o) {
     o.hitDone = true;
+    o.shadowFx?.setVisible(false);
     o.body.enable = false;
     this.scene.tweens.add({
       targets: o,

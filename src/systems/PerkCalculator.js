@@ -9,14 +9,15 @@ import { RUNNER } from '../config/GameConfig.js';
 /**
  * @param {object} equipped  save.equipped ({ baseDoll, outfit, headwear, tail, shoes })
  * @returns {{
- *   doubleJump: boolean, floatyFall: boolean, attractRadius: number,
+ *   doubleJump: boolean, maxJumps: number, floatyFall: boolean, attractRadius: number,
  *   shieldCharges: number, coinMultiplier: number, jumpMultiplier: number,
  *   gravityMultiplier: number, idleBonus: number, ticketLuck: number, sources: string[]
  * }}
  */
 export function computePerks(equipped = {}) {
   const perks = {
-    doubleJump: false,
+    doubleJump: true, // everyone can double jump (double tap)
+    maxJumps: 2,
     floatyFall: false,
     attractRadius: RUNNER.BASE_ATTRACT_RADIUS,
     shieldCharges: 0,
@@ -33,7 +34,7 @@ export function computePerks(equipped = {}) {
     if (!item?.perks) continue;
     const p = item.perks;
     if (Object.keys(p).length) perks.sources.push(item.name);
-    if (p.doubleJump) perks.doubleJump = true;
+    if (p.extraJump) perks.maxJumps += p.extraJump;
     if (p.floatyFall) perks.floatyFall = true;
     if (p.magnetBonus) perks.attractRadius += p.magnetBonus;
     if (p.shield) perks.shieldCharges += p.shield;

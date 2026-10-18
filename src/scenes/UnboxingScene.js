@@ -286,7 +286,7 @@ export class UnboxingScene extends Phaser.Scene {
 
     // Slide the figure left to make room for the card.
     const slideLeft = [this.figure, this.rays, this.glow, this.spot, this.banner].filter(Boolean);
-    this.tweens.add({ targets: slideLeft, x: 380, duration: 450, ease: 'Cubic.easeInOut' });
+    this.tweens.add({ targets: slideLeft, x: (WIDTH - 580) / 2 + 30, duration: 450, ease: 'Cubic.easeInOut' });
 
     const card = this.add.container(WIDTH + 400, 0);
     const x0 = 0;
@@ -327,7 +327,7 @@ export class UnboxingScene extends Phaser.Scene {
         })
       );
     }
-    this.tweens.add({ targets: card, x: 700, duration: 500, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: card, x: WIDTH - 580, duration: 500, ease: 'Back.easeOut' });
   }
 
   equipNow() {

@@ -56,6 +56,7 @@ describe('PerkCalculator', () => {
   it('applies the costume perks from the design doc', () => {
     const p = computePerks({ baseDoll: 'beaver_labubu_secret', outfit: 'lumberjack_vest', tail: 'beaver_paddle_tail' });
     expect(p.doubleJump).toBe(true);
+    expect(p.maxJumps).toBe(3);
     expect(p.floatyFall).toBe(true);
     expect(p.attractRadius).toBe(40 + 150);
     expect(p.shieldCharges).toBe(1);

@@ -11,7 +11,7 @@ import { WIDTH, COLORS } from '../config/GameConfig.js';
 import { CATALOG, RARITY_TIERS, RARITY_ORDER, describePerks } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
 import { computePerks } from '../systems/PerkCalculator.js';
-import { bakePlayerTextures } from '../art/CharacterRenderer.js';
+import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { addForestBackdrop, CurrencyBar, makeButton, makePanel, outlinedText, textStyle } from '../ui/UIKit.js';
 
 const TABS = [
@@ -22,7 +22,9 @@ const TABS = [
   { slot: 'shoes', label: 'Shoes' }
 ];
 
-const GRID = { x: 790, y: 190, cols: 3, cellW: 150, cellH: 162 };
+// Centre the 1280-wide layout on wider screens.
+const OX = Math.round((WIDTH - 1280) / 2);
+const GRID = { x: 790 + OX, y: 190, cols: 3, cellW: 150, cellH: 162 };
 
 export class ShowroomScene extends Phaser.Scene {
   constructor() {
@@ -41,25 +43,25 @@ export class ShowroomScene extends Phaser.Scene {
     makeButton(this, WIDTH - 100, 42, 'Back', () => this.leave(), { w: 160, h: 54, fontSize: 24, color: COLORS.mint, colorDark: 0x4fb594 });
 
     // Preview
-    this.add.image(250, 600, 'pedestal');
-    this.preview = this.add.image(250, 606, 'player_preview').setOrigin(0.5, 1).setScale(1.3);
+    this.add.image(250 + OX, 600, 'pedestal');
+    this.preview = this.add.image(250 + OX, 606, 'player_preview').setOrigin(0.5, 1).setScale(1.3);
     this.tweens.add({ targets: this.preview, scaleY: 1.33, scaleX: 1.28, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.easeInOut' });
-    this.dollName = outlinedText(this, 250, 660, '', 26, '#fff4e6');
-    this.collectionText = this.add.text(250, 696, '', textStyle(18, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
+    this.dollName = outlinedText(this, 250 + OX, 660, '', 26, '#fff4e6');
+    this.collectionText = this.add.text(250 + OX, 696, '', textStyle(18, '#fff4e6', { stroke: '#3d2a52', strokeThickness: 4 })).setOrigin(0.5);
 
     // Stats inspector
-    makePanel(this, 480, 90, 290, 610);
-    this.add.text(625, 118, 'Stats Inspector', textStyle(24)).setOrigin(0.5);
-    this.statsText = this.add.text(500, 148, '', textStyle(18, COLORS.text, { lineSpacing: 9 }));
-    this.statsValues = this.add.text(752, 148, '', textStyle(18, '#3fa98a', { lineSpacing: 9, align: 'right' })).setOrigin(1, 0);
-    this.add.graphics().lineStyle(2, COLORS.panelDark, 0.25).lineBetween(500, 462, 750, 462);
-    this.detailTitle = this.add.text(625, 474, '', textStyle(20, COLORS.text, { align: 'center', wordWrap: { width: 260 } })).setOrigin(0.5, 0);
-    this.detailBody = this.add.text(500, 508, '', textStyle(15, '#5a4a6a', { wordWrap: { width: 255 }, fontStyle: 'normal', lineSpacing: 2 }));
+    makePanel(this, 480 + OX, 90, 290, 610);
+    this.add.text(625 + OX, 118, 'Stats Inspector', textStyle(24)).setOrigin(0.5);
+    this.statsText = this.add.text(500 + OX, 148, '', textStyle(18, COLORS.text, { lineSpacing: 9 }));
+    this.statsValues = this.add.text(752 + OX, 148, '', textStyle(18, '#3fa98a', { lineSpacing: 9, align: 'right' })).setOrigin(1, 0);
+    this.add.graphics().lineStyle(2, COLORS.panelDark, 0.25).lineBetween(500 + OX, 462, 750 + OX, 462);
+    this.detailTitle = this.add.text(625 + OX, 474, '', textStyle(20, COLORS.text, { align: 'center', wordWrap: { width: 260 } })).setOrigin(0.5, 0);
+    this.detailBody = this.add.text(500 + OX, 508, '', textStyle(15, '#5a4a6a', { wordWrap: { width: 255 }, fontStyle: 'normal', lineSpacing: 2 }));
 
     // Wardrobe
-    makePanel(this, 780, 90, 480, 610);
+    makePanel(this, 780 + OX, 90, 480, 610);
     this.tabButtons = TABS.map((tab, i) =>
-      makeButton(this, 830 + i * 95, 135, tab.label, () => this.selectTab(tab.slot), { w: 90, h: 46, fontSize: 17, sound: 'click' })
+      makeButton(this, 830 + OX + i * 95, 135, tab.label, () => this.selectTab(tab.slot), { w: 90, h: 46, fontSize: 17, sound: 'click' })
     );
     this.grid = this.add.container(0, 0);
 
@@ -92,7 +94,7 @@ export class ShowroomScene extends Phaser.Scene {
     const idle = Services.idle;
     const rows = [
       ['Jump power', `${Math.round(p.jumpMultiplier * 100)}%`],
-      ['Double jump', p.doubleJump ? 'Yes' : 'No'],
+      ['Air jumps', p.maxJumps === 3 ? 'Triple' : 'Double'],
       ['Glide (hold)', p.floatyFall ? 'Yes' : 'No'],
       ['Coin magnet', `${p.attractRadius}px`],
       ['Shield', p.shieldCharges ? `${p.shieldCharges} hit` : 'None'],
@@ -142,7 +144,7 @@ export class ShowroomScene extends Phaser.Scene {
       g.fillStyle(owned ? 0xffffff : 0xd9cfe3, 1).fillRoundedRect(-66, -74, 132, 148, 16);
       g.lineStyle(equipped ? 6 : 4, equipped ? COLORS.gold : tier.color, 1).strokeRoundedRect(-66, -74, 132, 148, 16);
       g.fillStyle(tier.color, 1).fillRoundedRect(-66, 50, 132, 24, { tl: 0, tr: 0, bl: 16, br: 16 });
-      const icon = this.add.image(0, -10, `icon_${item.id}`).setScale(0.88);
+      const icon = this.add.image(0, -10, `icon_${item.id}`).setScale((0.88 * 0.75) / ICON_RES);
       if (!owned) icon.setTintFill(0x3d2a52).setAlpha(0.55);
       const name = this.add.text(0, 62, owned ? item.name : tier.label, textStyle(13, '#ffffff', { stroke: '#3d2a52', strokeThickness: 3 })).setOrigin(0.5);
       card.add([g, icon, name]);

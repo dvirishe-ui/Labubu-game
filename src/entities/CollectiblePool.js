@@ -13,7 +13,10 @@ import Phaser from 'phaser';
 export const PICKUP_TYPES = {
   coin: { texture: 'coin', scale: 0.8, radius: 16 },
   ticket: { texture: 'ticket', scale: 0.85, radius: 24 },
-  magnet: { texture: 'magnet', scale: 0.85, radius: 24 }
+  magnet: { texture: 'magnet', scale: 0.85, radius: 24 },
+  itembox: { texture: 'item_box', scale: 0.85, radius: 28 },
+  // Boost pads lie on the path and fire when you run over them (not collected).
+  boost: { texture: 'boost_pad', scale: 1, radius: 0, halfWidth: 80, depth: 6 }
 };
 
 const MAGNET_PULL_SPEED = 1100; // px/s when a coin homes in on the player
@@ -29,13 +32,14 @@ export class CollectiblePool {
     const def = PICKUP_TYPES[kind];
     const p = this.group.get(x, y, def.texture);
     if (!p) return null; // pool exhausted: skip
-    p.setTexture(def.texture).setActive(true).setVisible(true).setScale(def.scale).setDepth(18).setAlpha(1).setAngle(0);
+    p.setTexture(def.texture).setActive(true).setVisible(true).setScale(def.scale).setDepth(def.depth ?? 18).setAlpha(1).setAngle(0).clearTint();
     p.setPosition(x, y);
     p.kind = kind;
     p.radius = def.radius;
     p.baseY = y;
     p.attracted = false;
     p.collected = false;
+    p.used = false;
     return p;
   }
 
@@ -88,10 +92,24 @@ export class CollectiblePool {
               p.scaleX = 0.8;
             }
           }
-        } else {
+        } else if (p.kind === 'itembox') {
+          p.y = p.baseY + Math.sin(time * 0.006 + p.x * 0.02) * 6;
+          p.angle = Math.sin(time * 0.003 + p.x) * 12;
+        } else if (p.kind !== 'boost') {
           p.y = p.baseY + Math.sin(time * 0.005 + p.x * 0.01) * 8;
           p.angle = Math.sin(time * 0.004) * 8;
         }
+      }
+
+      // Boost pads: trigger once when the runner's feet pass over them.
+      if (p.kind === 'boost') {
+        if (!p.used && Math.abs(p.x - cx) < PICKUP_TYPES.boost.halfWidth + halfW && hitbox.bottom >= p.y - 16) {
+          p.used = true;
+          p.setTint(0xffffff);
+          onCollect?.(p);
+        }
+        if (p.x < -120) this.recycle(p);
+        return;
       }
 
       // Circle vs. rectangle overlap with the player's hitbox.

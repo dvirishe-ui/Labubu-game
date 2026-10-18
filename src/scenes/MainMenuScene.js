@@ -13,8 +13,9 @@ import { IdleRewardManager } from '../systems/IdleRewardManager.js';
 import { msUntilMidnight } from '../systems/QuestManager.js';
 import { buyTicket } from '../systems/GachaSystem.js';
 import { showRewardedAd } from '../systems/AdService.js';
-import { bakePlayerTextures } from '../art/CharacterRenderer.js';
+import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
+import { canFullscreen, toggleFullscreen } from '../ui/Fullscreen.js';
 import {
   addForestBackdrop,
   CurrencyBar,
@@ -31,6 +32,12 @@ import {
 } from '../ui/UIKit.js';
 
 const REWARD_ICON = { popCoins: 'coin', blindBoxTickets: 'ticket', goldenKeys: 'key' };
+
+// Layout anchors: the right column hugs the right edge on wide phones.
+const EXTRA = WIDTH - 1280;
+const PANEL_X = WIDTH - 400;
+const HERO_X = 230 + EXTRA * 0.25;
+const CENTER_X = 590 + EXTRA * 0.6;
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -75,7 +82,9 @@ export class MainMenuScene extends Phaser.Scene {
 
   buildTopRight() {
     // Sync status pill
-    this.syncPill = this.add.container(880, 39);
+    const fs = canFullscreen();
+    const right = WIDTH - (fs ? 60 : 130);
+    this.syncPill = this.add.container(right - 335, 39);
     this.syncPillBg = this.add.graphics();
     this.syncDot = this.add.circle(-62, 0, 8, 0x9aa0a6);
     this.syncText = this.add.text(-48, 0, '', textStyle(18, '#ffffff', { stroke: '#3d2a52', strokeThickness: 3 })).setOrigin(0, 0.5);
@@ -84,14 +93,33 @@ export class MainMenuScene extends Phaser.Scene {
     this.syncPill.setSize(170, 40).setInteractive({ useHandCursor: true });
     this.syncPill.on('pointerup', () => Services.sync.syncNow({ force: true }));
 
-    makeIconButton(this, 1010, 39, '♛', () => this.showLeaderboard(), { size: 54 });
-    this.muteBtn = makeIconButton(this, 1080, 39, '♪', () => this.toggleSound(), { size: 54 });
-    makeIconButton(this, 1150, 39, '≡', () => this.showSettings(), { size: 54 });
+    makeIconButton(this, right - 210, 39, '♛', () => this.showLeaderboard(), { size: 54 });
+    this.muteBtn = makeIconButton(this, right - 140, 39, '♪', () => this.toggleSound(), { size: 54 });
+    makeIconButton(this, right - 70, 39, '≡', () => this.showSettings(), { size: 54 });
+    if (fs) {
+      // Fullscreen + landscape lock (Android / desktop; hidden where unsupported)
+      const btn = makeIconButton(this, right, 39, '', () => toggleFullscreen(), { size: 54 });
+      const g = this.add.graphics();
+      g.lineStyle(4, COLORS.panelDark, 1);
+      for (const [sx, sy] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1]
+      ]) {
+        g.beginPath();
+        g.moveTo(sx * 12, sy * 4);
+        g.lineTo(sx * 12, sy * 12);
+        g.lineTo(sx * 4, sy * 12);
+        g.strokePath();
+      }
+      btn.add(g);
+    }
     this.updateMuteIcon();
   }
 
   buildCharacter() {
-    const x = 230;
+    const x = HERO_X;
     this.add.image(x, 585, 'pedestal');
     this.hero = this.add.image(x, 590, 'player_preview').setOrigin(0.5, 1).setScale(1.25);
     this.tweens.add({ targets: this.hero, scaleY: 1.28, scaleX: 1.23, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -106,7 +134,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   buildCenter() {
-    const cx = 590;
+    const cx = CENTER_X;
     const logo = outlinedText(this, cx, 130, 'LABUBU', 92, '#ff8fb1');
     outlinedText(this, cx, 200, 'Blind Box Run & Collect', 30, '#fff4e6');
     this.tweens.add({ targets: logo, angle: { from: -2, to: 2 }, yoyo: true, repeat: -1, duration: 1400, ease: 'Sine.easeInOut' });
@@ -126,7 +154,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   buildBoxPanel() {
-    const x = 880;
+    const x = PANEL_X;
     const y = 90;
     const w = 370;
     const h = 320;
@@ -159,7 +187,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   buildIdleBank() {
-    const x = 880;
+    const x = PANEL_X;
     const y = 430;
     const w = 370;
     const h = 270;
@@ -263,7 +291,7 @@ export class MainMenuScene extends Phaser.Scene {
   buyTicket() {
     if (buyTicket(Services.save)) {
       Services.audio.play('ticket');
-      floatText(this, 1148, 260, '+1 ticket', '#ff8fb1');
+      floatText(this, PANEL_X + 268, 260, '+1 ticket', '#ff8fb1');
     } else {
       Services.audio.play('error');
     }
@@ -450,7 +478,7 @@ export class MainMenuScene extends Phaser.Scene {
       g.fillStyle(e.isMe ? 0xffe3ec : i % 2 ? 0xffffff : 0xf8efe3, 1).fillRoundedRect(0, y, 660, 52, 12);
       const medal = ['#ffc93c', '#c0c7d1', '#d08a4e'][i];
       const rank = this.add.text(36, y + 26, `#${i + 1}`, textStyle(22, medal || COLORS.text, medal ? { stroke: '#3d2a52', strokeThickness: 4 } : {})).setOrigin(0.5);
-      const icon = this.textures.exists(`icon_${e.doll}`) ? this.add.image(100, y + 26, `icon_${e.doll}`).setScale(0.42) : null;
+      const icon = this.textures.exists(`icon_${e.doll}`) ? this.add.image(100, y + 26, `icon_${e.doll}`).setScale((0.42 * 0.75) / ICON_RES) : null;
       const name = this.add.text(140, y + 26, e.name || 'Labubu', textStyle(22)).setOrigin(0, 0.5);
       const score = this.add.text(640, y + 26, `${Number(e.score).toLocaleString('en-US')} m`, textStyle(22, '#c98a00')).setOrigin(1, 0.5);
       list.inner.add([g, rank, ...(icon ? [icon] : []), name, score]);

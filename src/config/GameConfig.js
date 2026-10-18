@@ -4,9 +4,44 @@
  * from here instead of hard-coding values so balancing never requires a hunt.
  */
 
-/** Logical resolution. Phaser's Scale.FIT letterboxes this onto any device. */
-export const WIDTH = 1280;
+/**
+ * Logical resolution. Height is fixed at 720; width follows the device's
+ * landscape aspect ratio (16:9 up to ~20:9 phones) so the game fills the whole
+ * screen instead of showing black bars. Layouts anchor to WIDTH, never to 1280.
+ */
 export const HEIGHT = 720;
+export const MIN_WIDTH = 1280;
+export const MAX_WIDTH = 1600;
+
+function screenDims() {
+  if (typeof window === 'undefined') return null;
+  const w = window.innerWidth || 1280;
+  const h = window.innerHeight || 720;
+  // Measure as landscape even if the phone is currently held upright.
+  return { long: Math.max(w, h), short: Math.min(w, h), dpr: window.devicePixelRatio || 1 };
+}
+
+function computeWidth() {
+  const d = screenDims();
+  if (!d) return MIN_WIDTH;
+  const w = Math.round((HEIGHT * d.long) / d.short);
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w - (w % 2)));
+}
+
+/**
+ * Render resolution multiplier. The canvas is rendered at WIDTH x HEIGHT x RES
+ * and every camera zooms by RES, so text, UI and character art stay razor
+ * sharp on high-DPI phones instead of being upscaled by the browser.
+ */
+function computeRes() {
+  const d = screenDims();
+  if (!d) return 1;
+  const physical = d.short * d.dpr;
+  return Math.round(Math.min(1.5, Math.max(1, physical / HEIGHT)) * 4) / 4;
+}
+
+export const WIDTH = computeWidth();
+export const RES = computeRes();
 
 export const STORAGE_KEY = 'labubu_blindbox_save_v1';
 export const SAVE_VERSION = 2;
@@ -20,8 +55,7 @@ export const RUNNER = {
   DOUBLE_JUMP_VELOCITY: -560,
   FAST_FALL_VELOCITY: 900, // swipe down while airborne slams you to the ground
   FLOATY_GRAVITY_FACTOR: 0.65, // beaver tail: -35% gravity while falling & holding jump
-  SLIDE_DURATION_MS: 650, // minimum slide time...
-  SLIDE_DISTANCE_PX: 340, // ...but a slide always covers at least this much ground
+  SLIDE_DURATION_MS: 380, // minimum duck time (holding keeps ducking)
 
   BASE_SPEED: 300, // px / second
   SPEED_PER_METER: 0.15, // speed = base + distance * 0.15
@@ -32,6 +66,21 @@ export const RUNNER = {
   SUPER_MAGNET_RADIUS: 420,
   SUPER_MAGNET_DURATION_MS: 8000,
   COIN_VALUE: 1,
+
+  // Mario Kart-style extras
+  COUNTDOWN_STEP_MS: 650, // 3 - 2 - 1 - GO!
+  ROCKET_WINDOW_MS: 260, // tap within this of "GO!" for a rocket start
+  ROCKET_BOOST: { ms: 1800, mult: 1.7 },
+  PAD_BOOST: { ms: 1400, mult: 1.45 },
+  MUSHROOM_BOOST: { ms: 2300, mult: 1.65 },
+  STAR_MS: 6000,
+  STAR_SPEED_MULT: 1.15,
+  COMBO_WINDOW_MS: 700, // coins collected within this window chain a combo
+  CLOSE_CALL_PX: 30, // clearing an obstacle by less than this = close call
+  REVIVE_TICKET_COST: 1,
+  REVIVE_PROMPT_MS: 5000,
+  DUCK_ZONE: 0.38, // left share of the screen that ducks on touch
+  SLIDE_TAP_PX: 210, // a tap-duck lasts at least this much ground travel
 
   DISTANCE_TICK_METERS: 10, // EVENT_DISTANCE_TICK fires every N meters
   MIN_OBSTACLE_GAP: 420, // px, scaled up with speed

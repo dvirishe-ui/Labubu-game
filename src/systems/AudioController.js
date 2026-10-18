@@ -240,6 +240,45 @@ export class AudioController {
     this.tone({ freq: NOTE(19), dur: 0.35, type: 'sine', vol: 0.18, delay: 0.08 });
     this.tone({ freq: NOTE(24), dur: 0.45, type: 'sine', vol: 0.15, delay: 0.14 });
   }
+  // ---- kart-style extras
+  sfx_countdown() {
+    this.tone({ freq: NOTE(-2), dur: 0.22, type: 'square', vol: 0.16 });
+  }
+  sfx_go() {
+    this.tone({ freq: NOTE(10), dur: 0.5, type: 'square', vol: 0.16 });
+    this.tone({ freq: NOTE(14), dur: 0.5, type: 'triangle', vol: 0.14 });
+  }
+  sfx_rocket() {
+    this.noise({ dur: 0.6, freq: 500, sweepTo: 3000, q: 0.7, vol: 0.3 });
+    this.arpeggio([0, 7, 12, 19], { step: 0.05, type: 'square', vol: 0.12, dur: 0.15 });
+  }
+  sfx_boost() {
+    this.noise({ dur: 0.45, freq: 400, sweepTo: 2600, q: 0.9, vol: 0.25 });
+    this.tone({ freq: 220, to: 660, dur: 0.35, type: 'sawtooth', vol: 0.08 });
+  }
+  sfx_itemBox() {
+    this.arpeggio([12, 16, 19, 24, 28], { step: 0.035, type: 'triangle', vol: 0.15, dur: 0.12 });
+  }
+  sfx_roulette() {
+    this.tone({ freq: NOTE(19 + Math.floor(Math.random() * 5)), dur: 0.04, type: 'square', vol: 0.06 });
+  }
+  sfx_itemGet() {
+    this.arpeggio([7, 11, 14, 19], { step: 0.05, type: 'square', vol: 0.12, dur: 0.14 });
+  }
+  sfx_star() {
+    this.arpeggio([0, 4, 7, 12, 16, 19, 24, 28], { step: 0.04, type: 'square', vol: 0.1, dur: 0.12 });
+  }
+  sfx_closeCall() {
+    this.tone({ freq: 900, to: 1800, dur: 0.12, type: 'triangle', vol: 0.12 });
+  }
+  sfx_combo() {
+    this.arpeggio([12, 19, 24], { step: 0.05, type: 'triangle', vol: 0.14, dur: 0.16 });
+  }
+  sfx_smash() {
+    this.noise({ dur: 0.25, freq: 900, sweepTo: 200, q: 1, vol: 0.3, type: 'lowpass' });
+    this.tone({ freq: 400, to: 120, dur: 0.18, type: 'square', vol: 0.12 });
+  }
+
   sfx_highScore() {
     this.arpeggio([0, 4, 7, 12, 7, 12, 16, 24], { step: 0.09, type: 'square', vol: 0.12, dur: 0.22 });
   }

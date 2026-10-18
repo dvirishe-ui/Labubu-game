@@ -107,8 +107,8 @@ export const CATALOG = {
     slot: 'tail',
     type: 'tail',
     rarity: 'common',
-    description: 'A flat, quilted tail. Slap the air for a second jump and glide down gently.',
-    perks: { doubleJump: true, floatyFall: true }
+    description: 'A flat, quilted tail. Slap the air for a third jump and glide down gently.',
+    perks: { extraJump: 1, floatyFall: true }
   },
 
   // ---------------------------------------------------------------- rare (29%)
@@ -195,8 +195,8 @@ export const isDoll = (id) => CATALOG[id]?.slot === 'doll';
 /** Human-readable perk descriptions for the stats inspector / reveal card. */
 export function describePerks(perks = {}) {
   const lines = [];
-  if (perks.doubleJump) lines.push('Double jump');
-  if (perks.floatyFall) lines.push('Floaty fall: -35% gravity while holding jump');
+  if (perks.extraJump) lines.push('Triple jump');
+  if (perks.floatyFall) lines.push('Glide: -35% gravity while holding jump');
   if (perks.magnetBonus) lines.push(`Coin magnet +${perks.magnetBonus}px`);
   if (perks.shield) lines.push(`${perks.shield}-hit shield per run`);
   if (perks.coinMultiplier) lines.push(`+${Math.round(perks.coinMultiplier * 100)}% coin value`);

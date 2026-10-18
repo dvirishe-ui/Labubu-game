@@ -4,7 +4,8 @@
  * audio), wires app-lifecycle hooks for mobile, and boots Phaser.
  */
 import Phaser from 'phaser';
-import { WIDTH, HEIGHT, RUNNER, COLORS } from './config/GameConfig.js';
+import { WIDTH, HEIGHT, RES, RUNNER, COLORS } from './config/GameConfig.js';
+import { DisplayPlugin } from './ui/Display.js';
 import { Services } from './systems/Services.js';
 import { EventBus } from './systems/EventBus.js';
 import { SaveManager } from './systems/SaveManager.js';
@@ -61,6 +62,12 @@ function initLifecycle() {
       Services.bus.emit('app:resume');
     }
   });
+  // Portrait phones see a "rotate your device" overlay (index.html): pause runs.
+  const portrait = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+  portrait.addEventListener?.('change', (e) => {
+    if (e.matches) Services.bus.emit('app:pause');
+  });
+
   window.addEventListener('pagehide', () => {
     Services.save.flush();
     Services.save.touchOnline();
@@ -73,8 +80,9 @@ initLifecycle();
 const config = {
   type: Phaser.AUTO,
   parent: 'game',
-  width: WIDTH,
-  height: HEIGHT,
+  // Rendered at RES x the logical size; DisplayPlugin zooms every camera back.
+  width: Math.round(WIDTH * RES),
+  height: Math.round(HEIGHT * RES),
   backgroundColor: COLORS.bgDark,
   scale: {
     mode: Phaser.Scale.FIT,
@@ -84,7 +92,8 @@ const config = {
     default: 'arcade',
     arcade: { gravity: { x: 0, y: RUNNER.GRAVITY }, debug: false }
   },
-  input: { activePointers: 3 },
+  input: { activePointers: 4 },
+  plugins: { scene: [{ key: 'DisplayPlugin', plugin: DisplayPlugin, mapping: 'display' }] },
   render: { antialias: true, powerPreference: 'high-performance' },
   // Phaser caps frame delta at 1000/min ms; RunnerScene uses the same cap so the
   // manually-scrolled world and the Arcade physics step never drift apart.

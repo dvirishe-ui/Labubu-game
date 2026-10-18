@@ -26,14 +26,16 @@
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
+        -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior: none;
       }
       #game {
         position: fixed;
         inset: 0;
-        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-          env(safe-area-inset-left);
+      }
+      #game canvas {
+        touch-action: none;
       }
       #boot-fallback {
         position: fixed;
@@ -45,11 +47,64 @@
         font: 600 18px system-ui, sans-serif;
         pointer-events: none;
       }
+      /* Upright phones: ask the player to rotate (the runner is a landscape game). */
+      #rotate-hint {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: radial-gradient(circle at 50% 40%, #5a3a7a, #2b1d3a 70%);
+        color: #fff4e6;
+        font: 700 22px 'Trebuchet MS', Verdana, system-ui, sans-serif;
+        text-align: center;
+        padding: 24px;
+      }
+      #rotate-hint .phone {
+        width: 70px;
+        height: 120px;
+        border: 6px solid #fff4e6;
+        border-radius: 16px;
+        position: relative;
+        animation: tilt 1.8s ease-in-out infinite;
+      }
+      #rotate-hint .phone::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: 8px;
+        width: 14px;
+        height: 14px;
+        margin-left: -7px;
+        border-radius: 50%;
+        background: #ff8fb1;
+      }
+      #rotate-hint small {
+        font-size: 16px;
+        opacity: 0.8;
+      }
+      @keyframes tilt {
+        0%, 20% { transform: rotate(0deg); }
+        60%, 100% { transform: rotate(-90deg); }
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate-hint {
+          display: flex;
+        }
+      }
     </style>
   </head>
   <body>
     <div id="boot-fallback">Opening the blind box…</div>
     <div id="game"></div>
+    <div id="rotate-hint">
+      <div class="phone"></div>
+      <div>Turn your phone sideways to play</div>
+      <small>Labubu runs best in landscape, full screen</small>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

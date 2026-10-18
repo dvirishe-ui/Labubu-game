@@ -5,13 +5,17 @@
  * A character is drawn in a 128 x 176 "frame space" (feet at y = 172), then
  * scaled by `res` for hi-res previews. Because every accessory is drawn in the
  * same transformed context as the body, hats / vests / tails automatically
- * follow every pose (run cycle, jump tuck, slide squash, crash spin).
+ * follow every pose (run cycle, jump tuck, duck crouch, crash spin).
  *
  * Exported bake helpers turn drawings into Phaser textures:
  *   bakeCharacterSheet(scene, key, loadout, res)  -> multi-frame sheet for the runner
  *   bakeCharacterFrame(scene, key, loadout, pose, res) -> single frame (icons, previews)
  */
 import { CATALOG } from '../config/GachaDropTable.js';
+import { RES } from '../config/GameConfig.js';
+
+/** Resolution of the per-item icons (displayed at ICON_SCALE / ICON_RES). */
+export const ICON_RES = 0.75 * RES;
 
 export const FRAME_W = 128;
 export const FRAME_H = 176;
@@ -26,7 +30,8 @@ export const POSES = {
   run3: { legF: -0.15, legB: 0.15, arm: 0.2, bob: -3, ear: 0.2 },
   jump: { legF: -0.9, legB: 0.5, arm: -2.2, bob: -2, ear: 0.45, tuck: 6 },
   fall: { legF: 0.35, legB: -0.25, arm: -1.2, bob: 0, ear: -0.15 },
-  slide: { legF: 1.2, legB: 1.0, arm: 1.3, bob: 0, ear: 0.7, slide: true },
+  // Compact crouch: head tucked down onto the body, ears swept flat behind.
+  slide: { legF: 1.0, legB: -0.9, arm: -1.1, bob: 0, ear: 0, duck: true },
   crash: { legF: 0.8, legB: -0.9, arm: -2.6, bob: 0, ear: -0.5, crash: true },
   idle: { legF: 0.05, legB: -0.05, arm: 0.15, bob: 0, ear: 0 },
   wave: { legF: 0.05, legB: -0.05, arm: -2.4, bob: -2, ear: 0.1, happy: true }
@@ -96,7 +101,7 @@ function furCircle(ctx, cx, cy, r, bumps = 18, depth = 2.2) {
   ctx.closePath();
 }
 
-const OUTLINE = 'rgba(40, 24, 30, 0.85)';
+const OUTLINE = '#2b1a24';
 
 // ---------------------------------------------------------------------------- parts
 
@@ -111,7 +116,7 @@ function drawEar(ctx, baseX, baseY, angle, pal, inner = true) {
   ctx.closePath();
   ctx.fillStyle = pal.fur;
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   if (inner) {
@@ -133,7 +138,7 @@ function drawLeg(ctx, hipX, hipY, angle, pal, shoes) {
   roundRect(ctx, -7, -2, 14, 24, 6);
   ctx.fillStyle = pal.shade;
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   // Foot / shoe
@@ -164,7 +169,7 @@ function drawArm(ctx, sx, sy, angle, pal, sleeve) {
   roundRect(ctx, -5, -2, 10, 20, 5);
   ctx.fillStyle = sleeve || pal.fur;
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   ellipse(ctx, 0, 19, 5.5, 5);
@@ -185,7 +190,7 @@ function drawTail(ctx, loadout, pal) {
     ellipse(ctx, -16, 6, 20, 10);
     ctx.fillStyle = '#6b4226';
     ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.6;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     // Quilted crosshatch
@@ -219,7 +224,7 @@ function drawTail(ctx, loadout, pal) {
     furCircle(ctx, 15, 97, 8, 8, 2);
     ctx.fillStyle = pal.fur;
     ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.6;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     ctx.restore();
@@ -241,7 +246,7 @@ function drawBody(ctx, loadout, pal) {
     ctx.closePath();
     ctx.fillStyle = '#c4202a';
     ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.6;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
   }
@@ -253,7 +258,7 @@ function drawBody(ctx, loadout, pal) {
   g.addColorStop(1, pal.shade);
   ctx.fillStyle = g;
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
 
@@ -336,7 +341,7 @@ function drawBody(ctx, loadout, pal) {
 
   if (outfit) {
     ellipse(ctx, 64, 120, 23, 21);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.6;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
   }
@@ -349,16 +354,63 @@ function drawHead(ctx, loadout, pal, pose) {
   const cx = 66;
   const cy = 66;
 
-  // Head fur
-  furCircle(ctx, cx, cy, 36, 30, 1.3);
-  const g = ctx.createRadialGradient(cx - 10, cy - 14, 6, cx, cy, 40);
-  g.addColorStop(0, shade(pal.fur.startsWith('#') ? pal.fur : '#cccccc', 18));
+  // Head fur: a cloud of overlapping tufts, outlined by drawing the same
+  // cloud slightly larger in the outline colour first.
+  const tufts = [];
+  const TUFTS = 22;
+  for (let i = 0; i < TUFTS; i++) {
+    const a = (i / TUFTS) * Math.PI * 2;
+    tufts.push([cx + Math.cos(a) * 31, cy + Math.sin(a) * 31, 8.5 + (i % 3) * 0.8]);
+  }
+  ctx.fillStyle = OUTLINE;
+  for (const [x, y, r] of tufts) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, 33, 0, Math.PI * 2);
+  ctx.fill();
+  const g = ctx.createRadialGradient(cx - 12, cy - 16, 4, cx + 4, cy + 6, 46);
+  g.addColorStop(0, shade(pal.fur, 34));
+  g.addColorStop(0.45, pal.fur);
   g.addColorStop(1, pal.shade);
   ctx.fillStyle = g;
+  for (const [x, y, r] of tufts) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, 33, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = 2.2;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
+  // Fur strands + rim light give the plush texture.
+  ctx.strokeStyle = shade(pal.fur, 40);
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 1.6;
+  const rndF = seeded(11);
+  for (let i = 0; i < 26; i++) {
+    const a = Math.PI * (0.95 + rndF() * 1.1);
+    const r = 24 + rndF() * 12;
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + 2, y - 4, x + 5 * Math.cos(a + 1.2), y + 5 * Math.sin(a + 1.2));
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  for (let i = 0; i < 14; i++) {
+    const a = Math.PI * (0.05 + rndF() * 0.85);
+    const r = 26 + rndF() * 9;
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 3, y + 4);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 
   // Speckled fur (Sesame colorway)
   if (pal.speckle) {
@@ -498,7 +550,7 @@ function drawHeadwear(ctx, loadout, pal) {
   const hw = loadout.headwear;
   const cx = 66;
   const cy = 66;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
 
   if (hw === 'beanie') {
@@ -588,7 +640,7 @@ function drawHeadwear(ctx, loadout, pal) {
     ctx.fillStyle = '#c4cdd9';
     ctx.fill();
     ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.6;
     ctx.stroke();
   }
 }
@@ -611,13 +663,12 @@ export function drawCharacter(ctx, loadout, pose = POSES.idle) {
   ctx.lineJoin = 'round';
   ctx.translate(0, DRAW_OFFSET_Y);
 
-  if (pose.slide) {
-    // Lean back and squash so the whole doll fits under low branches.
-    ctx.translate(64, 156);
-    ctx.rotate(-0.35);
-    ctx.scale(1.05, 0.62);
-    ctx.translate(-64, -156);
-  } else if (pose.crash) {
+  if (pose.duck) {
+    drawDuck(ctx, loadout, pal, pose);
+    ctx.restore();
+    return;
+  }
+  if (pose.crash) {
     ctx.translate(64, 100);
     ctx.rotate(0.45);
     ctx.translate(-64, -100);
@@ -649,6 +700,33 @@ export function drawCharacter(ctx, loadout, pose = POSES.idle) {
   ctx.restore();
 
   drawArm(ctx, 76, 108 + bob, pose.arm, pal, sleeve);
+  ctx.restore();
+}
+
+/**
+ * Duck pose: body squashed into a crouch, head tucked down in front of it and
+ * ears swept flat behind, so the doll is compact (about 60% of standing height)
+ * without any odd lean.
+ */
+function drawDuck(ctx, loadout, pal, pose) {
+  // Crouched body and bent legs
+  ctx.save();
+  ctx.translate(64, 156);
+  ctx.scale(1.12, 0.72);
+  ctx.translate(-64, -156);
+  drawTail(ctx, loadout, pal);
+  drawLeg(ctx, 54, 134, pose.legB, { ...pal, shade: shade(pal.shade, -20) }, loadout.shoes);
+  drawBody(ctx, loadout, pal);
+  drawLeg(ctx, 74, 134, pose.legF, pal, loadout.shoes);
+  ctx.restore();
+
+  // Head tucked low and slightly forward; ears flattened backwards.
+  ctx.save();
+  ctx.translate(6, 48);
+  drawEar(ctx, 50, 52, -1.38, pal);
+  drawEar(ctx, 62, 46, -1.2, pal);
+  drawHead(ctx, loadout, pal, pose);
+  drawHeadwear(ctx, loadout, pal);
   ctx.restore();
 }
 
@@ -736,7 +814,7 @@ export function loadoutFromEquipped(equipped) {
  */
 export function bakePlayerTextures(scene, equipped) {
   const loadout = loadoutFromEquipped(equipped);
-  bakeCharacterSheet(scene, 'player_sheet', loadout, 1);
+  bakeCharacterSheet(scene, 'player_sheet', loadout, RES); // crisp on high-DPI screens
   bakeCharacterFrame(scene, 'player_preview', loadout, 'idle', 2);
   bakeCharacterFrame(scene, 'player_wave', loadout, 'wave', 2);
 }

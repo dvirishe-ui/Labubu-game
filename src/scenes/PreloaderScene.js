@@ -10,7 +10,7 @@ import Phaser from 'phaser';
 import { WIDTH, HEIGHT, COLORS } from '../config/GameConfig.js';
 import { CATALOG } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
-import { bakePlayerTextures, bakeCharacterFrame, previewLoadoutFor } from '../art/CharacterRenderer.js';
+import { bakePlayerTextures, bakeCharacterFrame, previewLoadoutFor, ICON_RES } from '../art/CharacterRenderer.js';
 import { outlinedText, textStyle } from '../ui/UIKit.js';
 
 export class PreloaderScene extends Phaser.Scene {
@@ -47,7 +47,7 @@ export class PreloaderScene extends Phaser.Scene {
       { label: 'Dressing your Labubu…', run: () => bakePlayerTextures(this, Services.save.data.equipped) },
       ...Object.keys(CATALOG).map((id) => ({
         label: `Packing ${CATALOG[id].name}…`,
-        run: () => bakeCharacterFrame(this, `icon_${id}`, previewLoadoutFor(id), 'idle', 0.75)
+        run: () => bakeCharacterFrame(this, `icon_${id}`, previewLoadoutFor(id), 'idle', ICON_RES)
       }))
     ];
     let i = 0;

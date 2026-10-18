@@ -629,123 +629,347 @@ function makeBlindBox(scene) {
 // ---------------------------------------------------------------------------- backgrounds
 
 function makeBackgrounds(scene) {
-  // Sky gradient with a soft sun (static, layer 1)
+  // Sky (static, layer 1): saturated cartoon gradient, sun glow and rays.
   canvasTexture(scene, 'bg_sky', WIDTH, HEIGHT, (ctx, w, h) => {
     const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#8fd3ff');
-    g.addColorStop(0.55, '#ffe2f0');
-    g.addColorStop(1, '#ffd3a8');
+    g.addColorStop(0, '#3fa7ff');
+    g.addColorStop(0.45, '#8fd8ff');
+    g.addColorStop(0.75, '#ffe1f0');
+    g.addColorStop(1, '#ffd29a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    const sun = ctx.createRadialGradient(980, 170, 10, 980, 170, 160);
-    sun.addColorStop(0, 'rgba(255,250,210,1)');
-    sun.addColorStop(0.3, 'rgba(255,240,180,0.7)');
-    sun.addColorStop(1, 'rgba(255,240,180,0)');
+    const sx = w * 0.78;
+    const sy = 150;
+    ctx.save();
+    ctx.translate(sx, sy);
+    for (let i = 0; i < 14; i++) {
+      ctx.rotate((Math.PI * 2) / 14);
+      const rg = ctx.createLinearGradient(0, 0, 0, -520);
+      rg.addColorStop(0, 'rgba(255,250,220,0.35)');
+      rg.addColorStop(1, 'rgba(255,250,220,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-40, -520);
+      ctx.lineTo(40, -520);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    const sun = ctx.createRadialGradient(sx, sy, 10, sx, sy, 190);
+    sun.addColorStop(0, 'rgba(255,255,235,1)');
+    sun.addColorStop(0.22, 'rgba(255,244,190,0.95)');
+    sun.addColorStop(0.5, 'rgba(255,230,170,0.35)');
+    sun.addColorStop(1, 'rgba(255,230,170,0)');
     ctx.fillStyle = sun;
     ctx.fillRect(0, 0, w, h);
-    // distant hills
-    ctx.fillStyle = 'rgba(170,140,200,0.45)';
-    ctx.beginPath();
-    ctx.moveTo(0, 470);
-    for (let x = 0; x <= w; x += 40) ctx.lineTo(x, 430 + Math.sin(x / 140) * 40 + Math.sin(x / 57) * 12);
-    ctx.lineTo(w, h);
-    ctx.lineTo(0, h);
-    ctx.fill();
   });
 
-  // Clouds (tileable, layer 1 scroll)
+  // Big puffy clouds with shaded undersides (tileable).
   canvasTexture(scene, 'bg_clouds', 1024, 260, (ctx) => {
     const cloud = (x, y, s) => {
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      for (const [dx, dy, r] of [
-        [0, 0, 28],
-        [30, -14, 34],
-        [64, -4, 30],
-        [92, 6, 22],
-        [40, 10, 28]
-      ]) {
+      const puffs = [
+        [0, 0, 30],
+        [32, -18, 38],
+        [70, -6, 32],
+        [100, 6, 24],
+        [44, 12, 30],
+        [-24, 10, 22]
+      ];
+      ctx.fillStyle = 'rgba(160,180,230,0.55)';
+      for (const [dx, dy, r] of puffs) {
+        ctx.beginPath();
+        ctx.arc(x + dx * s, y + dy * s + 8 * s, r * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#ffffff';
+      for (const [dx, dy, r] of puffs) {
         ctx.beginPath();
         ctx.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2);
         ctx.fill();
       }
     };
-    cloud(80, 80, 1.1);
-    cloud(400, 150, 0.8);
-    cloud(640, 70, 1.3);
-    cloud(900, 170, 0.7);
+    cloud(90, 90, 1.15);
+    cloud(420, 160, 0.8);
+    cloud(660, 80, 1.35);
+    cloud(920, 175, 0.7);
   });
 
-  // Forest canopy silhouettes (tileable, layer 2). Every tree is drawn three
-  // times (x - w, x, x + w) so trees crossing the edge wrap seamlessly.
+  // Distant mountains with snow caps and sun-lit faces (tileable, layer 2).
+  canvasTexture(scene, 'bg_mountains', 1024, 300, (ctx, w, h) => {
+    const peaks = [
+      [80, 70, 180],
+      [300, 30, 220],
+      [520, 90, 170],
+      [720, 20, 240],
+      [930, 80, 190]
+    ];
+    for (const off of [-w, 0, w]) {
+      for (const [px, py, half] of peaks) {
+        const x = px + off;
+        ctx.fillStyle = '#8a7bd1';
+        ctx.beginPath();
+        ctx.moveTo(x - half, h);
+        ctx.lineTo(x, py);
+        ctx.lineTo(x + half, h);
+        ctx.closePath();
+        ctx.fill();
+        // shadow face
+        ctx.fillStyle = '#6d5fb8';
+        ctx.beginPath();
+        ctx.moveTo(x, py);
+        ctx.lineTo(x + half, h);
+        ctx.lineTo(x + half * 0.2, h);
+        ctx.closePath();
+        ctx.fill();
+        // snow cap
+        ctx.fillStyle = '#f4f2ff';
+        ctx.beginPath();
+        ctx.moveTo(x, py);
+        ctx.lineTo(x - half * 0.28, py + 60);
+        ctx.lineTo(x - half * 0.1, py + 50);
+        ctx.lineTo(x + half * 0.02, py + 64);
+        ctx.lineTo(x + half * 0.16, py + 48);
+        ctx.lineTo(x + half * 0.28, py + 60);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // atmospheric haze at the base
+    const haze = ctx.createLinearGradient(0, h - 120, 0, h);
+    haze.addColorStop(0, 'rgba(255,225,240,0)');
+    haze.addColorStop(1, 'rgba(255,225,240,0.75)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, w, h);
+  });
+
+  // Rolling hills with lollipop trees and mushroom houses (tileable, layer 3).
+  canvasTexture(scene, 'bg_hills', 1024, 260, (ctx, w, h) => {
+    const wrap = (fn) => [-w, 0, w].forEach(fn);
+    wrap((off) => {
+      ctx.fillStyle = '#7fd36b';
+      ctx.beginPath();
+      ctx.moveTo(off, h);
+      for (let x = 0; x <= w; x += 8) ctx.lineTo(off + x, 130 + Math.sin((x / w) * Math.PI * 4) * 34 + Math.sin((x / w) * Math.PI * 10) * 8);
+      ctx.lineTo(off + w, h);
+      ctx.closePath();
+      ctx.fill();
+    });
+    // sunlit ridge highlight
+    ctx.strokeStyle = 'rgba(255,255,210,0.6)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 8) ctx.lineTo(x, 132 + Math.sin((x / w) * Math.PI * 4) * 34 + Math.sin((x / w) * Math.PI * 10) * 8);
+    ctx.stroke();
+    const lolli = (x, y, r, c) =>
+      wrap((off) => {
+        ctx.fillStyle = '#6b4a2e';
+        ctx.fillRect(x + off - 3, y, 6, r * 1.6);
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(x + off, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.arc(x + off - r * 0.35, y - r * 0.35, r * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    const shroom = (x, y) =>
+      wrap((off) => {
+        ctx.fillStyle = '#fff4e6';
+        ctx.fillRect(x + off - 10, y - 16, 20, 18);
+        ctx.fillStyle = '#7a4a2a';
+        ctx.fillRect(x + off - 3, y - 10, 6, 12);
+        ctx.fillStyle = '#ff5a6e';
+        ctx.beginPath();
+        ctx.ellipse(x + off, y - 18, 22, 14, 0, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        for (const [dx, dy] of [
+          [-10, -24],
+          [4, -28],
+          [12, -21]
+        ]) {
+          ctx.beginPath();
+          ctx.arc(x + off + dx, y + dy, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+    lolli(120, 120, 22, '#4fbf5a');
+    lolli(170, 130, 16, '#ff9ec4');
+    lolli(470, 108, 26, '#4fbf5a');
+    lolli(780, 140, 20, '#ffd166');
+    lolli(830, 128, 14, '#4fbf5a');
+    shroom(330, 150);
+    shroom(640, 168);
+    shroom(960, 150);
+  });
+
+  // Forest canopy (tileable, layer 4): shaded pines and round oaks.
   canvasTexture(scene, 'bg_canopy', 1024, 400, (ctx, w, h) => {
     const wrap = (drawAt) => [-w, 0, w].forEach((off) => drawAt(off));
-    const pine = (x, height, color) =>
+    const pine = (x, height) =>
       wrap((off) => {
-        ctx.fillStyle = color;
-        ctx.fillRect(x + off - 6, h - height * 0.4, 12, height * 0.4);
+        ctx.fillStyle = '#4a3324';
+        ctx.fillRect(x + off - 6, h - height * 0.3, 12, height * 0.3);
         for (let i = 0; i < 3; i++) {
-          const y = h - height * 0.3 - i * height * 0.22;
-          const r = height * (0.32 - i * 0.07);
+          const y = h - height * 0.26 - i * height * 0.22;
+          const r = height * (0.3 - i * 0.065);
+          ctx.fillStyle = '#2f8a57';
           ctx.beginPath();
           ctx.moveTo(x + off - r, y);
           ctx.lineTo(x + off, y - r * 1.3);
           ctx.lineTo(x + off + r, y);
           ctx.closePath();
           ctx.fill();
+          ctx.fillStyle = '#3fae6a';
+          ctx.beginPath();
+          ctx.moveTo(x + off - r, y);
+          ctx.lineTo(x + off, y - r * 1.3);
+          ctx.lineTo(x + off - r * 0.1, y);
+          ctx.closePath();
+          ctx.fill();
         }
       });
     const oak = (x, ht) =>
       wrap((off) => {
-        ctx.fillStyle = '#3f6f4f';
-        ctx.fillRect(x + off - 8, h - ht * 0.45, 16, ht * 0.45);
-        ctx.fillStyle = '#467a55';
-        for (const [dx, dy, r] of [
+        ctx.fillStyle = '#5a3a24';
+        ctx.fillRect(x + off - 9, h - ht * 0.45, 18, ht * 0.45);
+        const blobs = [
           [0, -ht * 0.55, 54],
-          [-34, -ht * 0.45, 40],
-          [34, -ht * 0.45, 42],
+          [-36, -ht * 0.45, 40],
+          [36, -ht * 0.45, 42],
           [0, -ht * 0.8, 38]
-        ]) {
+        ];
+        ctx.fillStyle = '#2c7f4c';
+        for (const [dx, dy, r] of blobs) {
           ctx.beginPath();
           ctx.arc(x + off + dx, h + dy, r, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.fillStyle = '#45b06a';
+        for (const [dx, dy, r] of blobs) {
+          ctx.beginPath();
+          ctx.arc(x + off + dx - r * 0.18, h + dy - r * 0.2, r * 0.72, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(255,255,220,0.35)';
+        ctx.beginPath();
+        ctx.arc(x + off - 20, h - ht * 0.82, 14, 0, Math.PI * 2);
+        ctx.fill();
       });
-    for (let x = 20; x < w; x += 73) pine(x, 200 + ((x * 37) % 90), '#5e8f6e'); // back row
+    for (let x = 20; x < w; x += 73) pine(x, 200 + ((x * 37) % 90)); // back row
     for (let x = 40; x < w; x += 128) oak(x, 230 + ((x * 13) % 60)); // front row
   });
 
-  // Running surface strip (tileable, layer 3)
+  // Running surface (tileable, layer 5): grass lip with flowers, layered dirt.
   canvasTexture(scene, 'ground', 256, 130, (ctx) => {
     const g = ctx.createLinearGradient(0, 0, 0, 130);
-    g.addColorStop(0, '#9b6a43');
-    g.addColorStop(1, '#5e3c24');
+    g.addColorStop(0, '#b97a45');
+    g.addColorStop(0.5, '#93592f');
+    g.addColorStop(1, '#5c3519');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 130);
+    // strata
+    ctx.fillStyle = 'rgba(255,220,170,0.18)';
+    ctx.fillRect(0, 48, 256, 6);
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(0, 86, 256, 8);
+    // pebbles
     for (const [x, y, r] of [
-      [30, 50, 6],
-      [90, 80, 4],
-      [160, 40, 5],
-      [210, 95, 7],
-      [120, 110, 3]
+      [30, 66, 6],
+      [92, 100, 5],
+      [160, 60, 7],
+      [214, 108, 8],
+      [126, 118, 4],
+      [60, 112, 4]
     ]) {
+      ctx.fillStyle = '#c9a27a';
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.ellipse(x, y, r * 1.3, r, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.4, y - r * 0.35, r * 0.5, r * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    // grass top
-    ctx.fillStyle = '#6cc04f';
-    ctx.fillRect(0, 0, 256, 14);
-    ctx.fillStyle = '#4e9a3a';
+    // grass lip
+    ctx.fillStyle = '#3f9b3a';
+    ctx.fillRect(0, 0, 256, 22);
+    ctx.fillStyle = '#6ad04f';
+    ctx.fillRect(0, 0, 256, 15);
+    ctx.fillStyle = '#9cf27a';
+    ctx.fillRect(0, 0, 256, 4);
+    ctx.fillStyle = '#3f9b3a';
     for (let x = 0; x < 256; x += 8) {
       ctx.beginPath();
-      ctx.moveTo(x, 14);
-      ctx.lineTo(x + 4, 24);
-      ctx.lineTo(x + 8, 14);
+      ctx.moveTo(x, 21);
+      ctx.lineTo(x + 4, 31);
+      ctx.lineTo(x + 8, 21);
       ctx.fill();
     }
-    ctx.fillStyle = '#8ee070';
-    for (let x = 2; x < 256; x += 16) ctx.fillRect(x, 0, 3, 5);
+    // tiny flowers on the lip
+    for (const [x, c] of [
+      [20, '#ffffff'],
+      [74, '#ffd166'],
+      [140, '#ff8fb1'],
+      [200, '#ffffff']
+    ]) {
+      ctx.fillStyle = c;
+      for (const [dx, dy] of [
+        [-3, 0],
+        [3, 0],
+        [0, -3],
+        [0, 3]
+      ]) {
+        ctx.beginPath();
+        ctx.arc(x + dx, 7 + dy, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#ffb000';
+      ctx.beginPath();
+      ctx.arc(x, 7, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // Foreground tufts that rush past in front of everything (depth cue).
+  canvasTexture(scene, 'fg_grass', 1024, 90, (ctx, w, h) => {
+    const tuft = (x, s, c) => {
+      ctx.fillStyle = c;
+      for (let i = -3; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + i * 6 * s, h);
+        ctx.quadraticCurveTo(x + i * 9 * s, h - 40 * s, x + i * 12 * s + 6, h - (60 - Math.abs(i) * 9) * s);
+        ctx.lineTo(x + i * 6 * s + 6 * s, h);
+        ctx.fill();
+      }
+    };
+    for (const [x, s, c] of [
+      [60, 1, '#2f8a3a'],
+      [300, 0.8, '#3fa64a'],
+      [520, 1.2, '#2f8a3a'],
+      [760, 0.9, '#3fa64a'],
+      [940, 1.05, '#2f8a3a']
+    ]) {
+      tuft(x, s, c);
+    }
+    for (const x of [180, 640, 860]) {
+      ctx.fillStyle = '#ff6f9c';
+      ctx.beginPath();
+      ctx.arc(x, h - 34, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffe066';
+      ctx.beginPath();
+      ctx.arc(x, h - 34, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#2f8a3a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x, h - 27);
+      ctx.lineTo(x + 2, h);
+      ctx.stroke();
+    }
   });
 
   // Menu pedestal for the character preview
@@ -772,6 +996,162 @@ function makeBackgrounds(scene) {
   });
 }
 
+// ---------------------------------------------------------------------------- kart-style extras
+
+function makeKartExtras(scene) {
+  // Rainbow "?" item box (Mario Kart style), glossy and slightly translucent.
+  canvasTexture(scene, 'item_box', 72, 72, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 72, 72);
+    g.addColorStop(0, '#ff6b9a');
+    g.addColorStop(0.25, '#ffd166');
+    g.addColorStop(0.5, '#6ee7a8');
+    g.addColorStop(0.75, '#59b8ff');
+    g.addColorStop(1, '#b07cff');
+    rr(ctx, 6, 6, 60, 60, 14);
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 0.92;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    rr(ctx, 12, 11, 48, 16, 8);
+    ctx.fill();
+    ctx.font = 'bold 40px Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#3d2a52';
+    ctx.strokeText('?', 36, 40);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('?', 36, 40);
+  });
+
+  // Boost pad: glowing chevrons set into the path.
+  canvasTexture(scene, 'boost_pad', 170, 26, (ctx) => {
+    rr(ctx, 2, 4, 166, 20, 8);
+    const g = ctx.createLinearGradient(0, 0, 170, 0);
+    g.addColorStop(0, '#ff7a1a');
+    g.addColorStop(1, '#ffd23f');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#7a3300';
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (let x = 14; x < 160; x += 30) {
+      ctx.beginPath();
+      ctx.moveTo(x, 8);
+      ctx.lineTo(x + 14, 14);
+      ctx.lineTo(x, 20);
+      ctx.lineTo(x + 6, 14);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+
+  // Speed line streak
+  canvasTexture(scene, 'fx_speedline', 160, 6, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 160, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(1, 'rgba(255,255,255,0.9)');
+    ctx.fillStyle = g;
+    rr(ctx, 0, 1, 160, 4, 2);
+    ctx.fill();
+  });
+
+  // Touch ripple ring
+  canvasTexture(scene, 'fx_touch', 96, 96, (ctx) => {
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(48, 48, 40, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  // ---- item icons (48 x 48)
+  canvasTexture(scene, 'item_mushroom', 56, 56, (ctx) => {
+    ctx.fillStyle = '#fff4e6';
+    rr(ctx, 18, 26, 20, 22, 8);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.fillStyle = '#2b1a24';
+    ctx.fillRect(22, 33, 3, 7);
+    ctx.fillRect(31, 33, 3, 7);
+    ctx.beginPath();
+    ctx.ellipse(28, 26, 24, 18, 0, Math.PI, 0);
+    ctx.closePath();
+    ctx.fillStyle = '#e8324b';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (const [x, y, r] of [
+      [28, 15, 6],
+      [14, 22, 4],
+      [42, 22, 4]
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  canvasTexture(scene, 'item_star', 56, 56, (ctx) => {
+    ctx.translate(28, 29);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? 25 : 11;
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath();
+    const g = ctx.createRadialGradient(-6, -8, 2, 0, 0, 26);
+    g.addColorStop(0, '#fff8c4');
+    g.addColorStop(1, '#ffb800');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#a06a00';
+    ctx.stroke();
+    ctx.fillStyle = '#2b1a24';
+    ctx.fillRect(-6, -6, 3, 8);
+    ctx.fillRect(3, -6, 3, 8);
+  });
+  canvasTexture(scene, 'item_shield', 56, 56, (ctx) => {
+    const g = ctx.createRadialGradient(22, 20, 4, 28, 28, 26);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.6, 'rgba(140,210,255,0.6)');
+    g.addColorStop(1, 'rgba(80,160,255,0.9)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(28, 28, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#2b6fd6';
+    ctx.stroke();
+  });
+  canvasTexture(scene, 'item_coins', 56, 56, (ctx) => {
+    for (const [x, y] of [
+      [20, 36],
+      [36, 36],
+      [28, 22]
+    ]) {
+      const g = ctx.createRadialGradient(x - 4, y - 4, 2, x, y, 13);
+      g.addColorStop(0, '#fff6c2');
+      g.addColorStop(1, '#e09a00');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#9a5f00';
+      ctx.stroke();
+    }
+  });
+}
+
 /** Generates every non-character texture. Called once from BootScene. */
 export function generateAllTextures(scene) {
   makePickups(scene);
@@ -779,4 +1159,5 @@ export function generateAllTextures(scene) {
   makeParticles(scene);
   makeBlindBox(scene);
   makeBackgrounds(scene);
+  makeKartExtras(scene);
 }
