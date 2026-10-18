@@ -135,6 +135,17 @@ export function migrateSave(raw, now = Date.now()) {
   return data;
 }
 
+/** localStorage, or null when the browser refuses access (sandboxed frames, privacy modes). */
+function defaultStorage() {
+  try {
+    const s = globalThis.localStorage;
+    s?.getItem(STORAGE_KEY);
+    return s ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export class SaveManager {
   /**
    * @param {object} opts
@@ -142,7 +153,7 @@ export class SaveManager {
    * @param {import('./EventBus.js').EventBus} [opts.bus]
    * @param {() => number} [opts.now] clock (injectable for tests)
    */
-  constructor({ storage = globalThis.localStorage, bus = null, now = () => Date.now() } = {}) {
+  constructor({ storage = defaultStorage(), bus = null, now = () => Date.now() } = {}) {
     this.storage = storage;
     this.bus = bus;
     this.now = now;

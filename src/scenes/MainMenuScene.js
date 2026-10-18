@@ -14,6 +14,7 @@ import { msUntilMidnight } from '../systems/QuestManager.js';
 import { buyTicket } from '../systems/GachaSystem.js';
 import { showRewardedAd } from '../systems/AdService.js';
 import { bakePlayerTextures } from '../art/CharacterRenderer.js';
+import { askText } from '../ui/TextPrompt.js';
 import {
   addForestBackdrop,
   CurrencyBar,
@@ -468,10 +469,10 @@ export class MainMenuScene extends Phaser.Scene {
     );
   }
 
-  promptRename(modal) {
+  async promptRename(modal) {
     const current = Services.save.data.profile.displayName;
-    // window.prompt works in browsers and in Capacitor WebViews.
-    const name = window.prompt('Choose a display name (max 18 characters)', current);
+    // In-page dialog: window.prompt() is blocked in many embedded WebViews.
+    const name = await askText({ title: 'Choose a display name', value: current, maxLength: 18 });
     if (name && Services.sync.setDisplayName(name)) {
       Services.bus.emit('ui:toast', { text: `Hello, ${Services.save.data.profile.displayName}!`, color: COLORS.mint });
       modal?.close();
@@ -528,13 +529,22 @@ export class MainMenuScene extends Phaser.Scene {
         310,
         480,
         'Reset progress',
-        () => {
-          if (window.confirm('Erase ALL local progress? This cannot be undone.')) {
-            Services.save.reset();
-            Services.quests.refreshIfNeeded();
-            bakePlayerTextures(this, Services.save.data.equipped);
-            this.scene.restart();
+        (btn) => {
+          // Two-tap confirmation (window.confirm() is blocked in embedded WebViews).
+          if (!btn.armed) {
+            btn.armed = true;
+            btn.setLabel('Tap again to erase');
+            this.time.delayedCall(3000, () => {
+              if (!btn.scene) return;
+              btn.armed = false;
+              btn.setLabel('Reset progress');
+            });
+            return;
           }
+          Services.save.reset();
+          Services.quests.refreshIfNeeded();
+          bakePlayerTextures(this, Services.save.data.equipped);
+          this.scene.restart();
         },
         { w: 300, h: 50, fontSize: 20, color: 0xe8324b, colorDark: 0xa31d30 }
       )
