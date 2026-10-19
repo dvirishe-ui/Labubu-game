@@ -48,7 +48,8 @@ export function createDefaultSave(now = Date.now()) {
       outfit: null,
       headwear: null,
       tail: null,
-      shoes: null
+      shoes: null,
+      back: null
     },
     inventory: [{ id: 'labubu_classic', type: 'base', unlockedAt: now }],
     stats: {

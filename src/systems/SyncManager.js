@@ -39,6 +39,12 @@ export function createAdapterFromEnv(env = {}) {
  *
  * @returns {{ winner: 'local'|'cloud', merged: object, latest: number, cloudNeedsUpdate: boolean, localNeedsUpdate: boolean }}
  */
+/** A brand-new save nobody has played yet (it must never overwrite real progress). */
+export function isPristine(save) {
+  const s = save?.stats || {};
+  return !s.totalRuns && !s.boxesOpened && !(save?.progress?.xp > 0) && (save?.inventory?.length || 0) <= 1;
+}
+
 export function resolveConflict(local, cloud) {
   const localTs = local?.meta?.updatedAt || 0;
   if (!cloud) {
@@ -46,7 +52,9 @@ export function resolveConflict(local, cloud) {
   }
   const cloudTs = cloud?.meta?.updatedAt || 0;
   const latest = Math.max(localTs, cloudTs);
-  const winner = cloudTs > localTs ? 'cloud' : 'local';
+  // Signing in on a fresh phone: the untouched local save always loses.
+  const freshDevice = isPristine(local) && !isPristine(cloud);
+  const winner = freshDevice || cloudTs > localTs ? 'cloud' : 'local';
   const base = JSON.parse(JSON.stringify(winner === 'cloud' ? cloud : local));
   const other = winner === 'cloud' ? local : cloud;
 
@@ -130,6 +138,14 @@ export class SyncManager {
     return typeof navigator === 'undefined' ? true : navigator.onLine !== false;
   }
 
+  /** Switches to another backend (e.g. the Claude account found at login). */
+  setAdapter(adapter) {
+    this.adapter = adapter;
+    this._hasSyncedThisSession = false;
+    this._retryDelay = SYNC.RETRY_BASE_MS;
+    this._refreshIdleStatus();
+  }
+
   /** Wires network listeners and kicks an initial sync if online. */
   start() {
     if (typeof window !== 'undefined') {
@@ -204,6 +220,12 @@ export class SyncManager {
       })
       .catch((err) => {
         this.lastError = err;
+        if (this.adapter.readOnly) {
+          // Signed in but not allowed to write here: stay local, stop retrying.
+          this.adapter.enabled = false;
+          this._setStatus('local');
+          return;
+        }
         console.warn('[SyncManager] sync failed, will retry', err);
         this._setStatus('error', { message: err?.message });
         clearTimeout(this._timer);

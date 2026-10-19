@@ -28,7 +28,8 @@ export const SLOTS = {
   outfit: 'outfit',
   headwear: 'headwear',
   tail: 'tail',
-  shoes: 'shoes'
+  shoes: 'shoes',
+  back: 'back'
 };
 
 export const SERIES_NAME = 'The Monsters · Forest Run Series';
@@ -379,6 +380,74 @@ export const CATALOG = {
     perks: { extraJump: 1, floatyFall: true }
   }
 };
+
+/** Compact constructor for wardrobe items drawn by art/Wardrobe.js from `look`. */
+const wear = (id, name, slot, rarity, description, look, perks = {}) => ({ id, name, slot, type: slot, rarity, description, look, perks });
+
+/** The big wardrobe: outfits, hats, shoes, tails and back items (wings, capes, packs). */
+const WARDROBE = [
+  // ---- outfits
+  wear('tee_rainbow', 'Rainbow Tee', 'outfit', 'common', 'A comfy white tee with a rainbow on the front.', { kind: 'tee', color: '#ffffff', print: 'rainbow', trim: '#ff8fb1' }),
+  wear('hoodie_pink', 'Bubblegum Hoodie', 'outfit', 'common', 'Super soft, super pink, super cozy.', { kind: 'hoodie', color: '#ff8fc8', trim: '#ffffff' }),
+  wear('hoodie_mint', 'Minty Hoodie', 'outfit', 'common', 'Fresh as a mint ice cream.', { kind: 'hoodie', color: '#6ee7b7', trim: '#ffffff' }),
+  wear('sailor_stripes', 'Sailor Stripes', 'outfit', 'common', 'Ahoy! Blue and white like the sea.', { kind: 'stripes', color: '#ffffff', alt: '#3a6fd8' }),
+  wear('denim_overalls', 'Denim Overalls', 'outfit', 'common', 'Pockets for snacks. Lots of snacks.', { kind: 'overalls', color: '#4a78c9', shirt: '#ffd23f' }),
+  wear('polka_dress', 'Polka Dot Dress', 'outfit', 'common', 'Twirl-tested red dress with white dots.', { kind: 'dress', color: '#ff5a6e', dots: '#ffffff' }),
+  wear('ballet_tutu', 'Ballet Tutu', 'outfit', 'rare', 'Lilac tulle for the fanciest pirouettes.', { kind: 'tutu', color: '#d8b4ff', alt: '#f2e3ff' }),
+  wear('varsity_jacket', 'Varsity Jacket', 'outfit', 'rare', 'Team Labubu, number one fan.', { kind: 'jacket', color: '#2f6fd6', sleeve: '#ffffff', trim: '#ffd23f' }),
+  wear('soccer_jersey', 'Star Striker Jersey', 'outfit', 'rare', 'Lucky number 10. Goooal!', { kind: 'jersey', color: '#2fc24f', trim: '#ffffff', number: '10' }),
+  wear('snowflake_sweater', 'Snowflake Sweater', 'outfit', 'rare', 'Knitted by grandma monster.', { kind: 'stripes', color: '#c7362f', alt: '#ffffff', print: 'snow' }),
+  wear('tiny_tuxedo', 'Tiny Tuxedo', 'outfit', 'epic', 'For very important monster parties.', { kind: 'suit', color: '#24202e', shirt: '#ffffff', sleeve: '#24202e' }, { coinMultiplier: 0.03 }),
+  wear('sakura_kimono', 'Sakura Kimono', 'outfit', 'epic', 'Cherry blossoms and a big bow on the back.', { kind: 'kimono', color: '#ffb3cf', trim: '#c2185b', print: 'flowers' }),
+  wear('knight_armor', 'Knight Armor', 'outfit', 'epic', 'Shiny, clanky and very brave.', { kind: 'armor', color: '#c9d2de', trim: '#ffc93c', sleeve: '#c9d2de' }, { shield: 1 }),
+  wear('royal_gown', 'Royal Ball Gown', 'outfit', 'legendary', 'Sparkling purple gown fit for a queen.', { kind: 'dress', color: '#8a4dff', dots: '#ffe066', sparkle: true }, { idleBonus: 0.1 }),
+  wear('super_suit', 'Super Labubu Suit', 'outfit', 'legendary', 'Faster than a speeding coin!', { kind: 'hero', color: '#2f6fd6', trim: '#e8324b', emblem: 'L' }, { jumpBoost: 0.08 }),
+
+  // ---- headwear
+  wear('red_cap', 'Red Ball Cap', 'headwear', 'common', 'Classic cap, brim to the front.', { kind: 'cap', color: '#e8324b' }),
+  wear('blue_cap', 'Sky Ball Cap', 'headwear', 'common', 'Bright blue like a sunny day.', { kind: 'cap', color: '#3f8fff' }),
+  wear('pink_bow', 'Big Pink Bow', 'headwear', 'common', 'The bigger the bow, the better.', { kind: 'bow', color: '#ff6fae' }),
+  wear('party_hat', 'Party Hat', 'headwear', 'common', 'Every run is a party!', { kind: 'party', color: '#59b8ff', alt: '#ffd23f' }),
+  wear('flower_crown', 'Flower Crown', 'headwear', 'common', 'Picked fresh from the forest road.', { kind: 'flowers', color: '#ff8fb1' }),
+  wear('headphones', 'Beat Headphones', 'headwear', 'rare', 'Running is better with music.', { kind: 'headphones', color: '#8a4dff' }),
+  wear('chef_hat', 'Chef Hat', 'headwear', 'rare', 'Cooks up the tastiest coin combos.', { kind: 'chef' }),
+  wear('cowboy_hat', 'Cowboy Hat', 'headwear', 'rare', 'Yee-haw, partner!', { kind: 'cowboy', color: '#b07040' }),
+  wear('star_shades', 'Star Shades', 'headwear', 'rare', 'Too cool for the sun.', { kind: 'shades', color: '#ff4fa3' }),
+  wear('top_hat', 'Magic Top Hat', 'headwear', 'epic', 'Pull a coin out of it. Or a bunny.', { kind: 'tophat', color: '#24202e', trim: '#e0337f' }, { coinMultiplier: 0.03 }),
+  wear('witch_hat', 'Witch Hat', 'headwear', 'epic', 'Spooky, sparkly and a little bendy.', { kind: 'witch', color: '#4a2a7a', trim: '#ff9f43' }),
+  wear('propeller_cap', 'Propeller Cap', 'headwear', 'epic', 'Spins when you jump. Floaty!', { kind: 'propeller', color: '#ffd23f', alt: '#e8324b' }, { gravityReduction: 0.05 }),
+  wear('golden_crown', 'Golden Crown', 'headwear', 'legendary', 'Ruby-topped crown of the Monster King.', { kind: 'crown', color: '#ffc93c', gem: '#e8324b' }, { coinMultiplier: 0.05 }),
+  wear('angel_halo', 'Angel Halo', 'headwear', 'legendary', 'A glowing ring of pure goodness.', { kind: 'halo' }, { shield: 1 }),
+
+  // ---- shoes
+  wear('pink_sneakers', 'Bubblegum Sneakers', 'shoes', 'common', 'Pink kicks with white soles.', { kind: 'sneakers', color: '#ff6fae', trim: '#ffffff' }),
+  wear('rain_boots', 'Puddle Boots', 'shoes', 'common', 'Splash-proof yellow wellies.', { kind: 'boots', color: '#ffd23f' }),
+  wear('bunny_slippers', 'Bunny Slippers', 'shoes', 'rare', 'Fluffy slippers with tiny ears.', { kind: 'slippers', color: '#ffffff', alt: '#ffb3cf' }),
+  wear('cowboy_boots', 'Cowboy Boots', 'shoes', 'rare', 'Stompy boots with gold trim.', { kind: 'boots', color: '#8a5a34', trim: '#ffc93c' }),
+  wear('roller_skates', 'Roller Skates', 'shoes', 'epic', 'Wheee! Zoom down the forest road.', { kind: 'skates', color: '#59b8ff', alt: '#ffd23f' }, { coinMultiplier: 0.03 }),
+  wear('rocket_boots', 'Rocket Boots', 'shoes', 'legendary', 'Little rockets for really big jumps.', { kind: 'rocket', color: '#c9d2de', alt: '#ff7a1a' }, { jumpBoost: 0.12 }),
+  wear('glass_slippers', 'Glass Slippers', 'shoes', 'legendary', 'Sparkly slippers from a fairy tale.', { kind: 'glass' }, { idleBonus: 0.1 }),
+
+  // ---- tails
+  wear('bunny_puff', 'Bunny Puff', 'tail', 'common', 'A fluffy cotton-ball tail.', { kind: 'puff', color: '#ffffff' }),
+  wear('cat_tail', 'Kitty Tail', 'tail', 'common', 'Swishy, curly, purrfect.', { kind: 'cat', color: '#3a2a3a' }),
+  wear('fox_tail', 'Fox Tail', 'tail', 'rare', 'Big, bushy and orange with a white tip.', { kind: 'fox', color: '#ff8a3d', tip: '#ffffff' }),
+  wear('devil_tail', 'Little Devil Tail', 'tail', 'rare', 'Cheeky red tail with a pointy tip.', { kind: 'devil', color: '#e8324b' }),
+  wear('dino_tail', 'Dino Tail', 'tail', 'epic', 'RAWR! Spiky green dinosaur tail.', { kind: 'dino', color: '#4fc77a', spikes: '#ffd23f' }),
+  wear('mermaid_tail', 'Mermaid Tail', 'tail', 'epic', 'Shimmery fin for splashing.', { kind: 'mermaid', color: '#3ec7c0', alt: '#8a4dff' }),
+  wear('rainbow_tail', 'Rainbow Tail', 'tail', 'legendary', 'Every color of the rainbow, all fluffy.', { kind: 'fox', rainbow: true }, { magnetBonus: 1 }),
+
+  // ---- back (new slot)
+  wear('school_backpack', 'Star Backpack', 'back', 'common', 'Room for every coin you find.', { kind: 'backpack', color: '#ff9f43' }),
+  wear('mint_backpack', 'Mint Backpack', 'back', 'common', 'A fresh minty pack.', { kind: 'backpack', color: '#2fc2a0' }),
+  wear('butterfly_wings', 'Butterfly Wings', 'back', 'rare', 'Blue and yellow, flutter-ready.', { kind: 'butterfly', color: '#59b8ff', alt: '#ffd23f' }),
+  wear('hero_cape', 'Hero Cape', 'back', 'rare', 'Every hero needs a cape.', { kind: 'cape', color: '#e8324b' }),
+  wear('fairy_wings', 'Fairy Wings', 'back', 'epic', 'See-through and sparkly.', { kind: 'fairy', color: '#b8f0ff' }, { gravityReduction: 0.05 }),
+  wear('bat_wings', 'Bat Wings', 'back', 'epic', 'Spooky-cute purple wings.', { kind: 'bat', color: '#4a2a7a' }),
+  wear('jetpack', 'Jet Pack', 'back', 'epic', 'Two little rockets on your back.', { kind: 'jetpack', color: '#c9d2de', alt: '#ff7a1a' }, { jumpBoost: 0.06 }),
+  wear('angel_wings', 'Angel Wings', 'back', 'legendary', 'Feathery wings: hold to glide!', { kind: 'angel', color: '#ffffff' }, { floatyFall: true })
+];
+for (const item of WARDROBE) CATALOG[item.id] = item;
 
 /** Pre-bucketed pool: rarity -> array of droppable item ids. */
 export const DROP_POOL = RARITY_ORDER.reduce((pool, rarity) => {

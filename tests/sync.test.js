@@ -31,6 +31,7 @@ describe('resolveConflict (latest timestamp wins)', () => {
     const local = clone(save.data);
     const cloud = clone(save.data);
     local.meta.updatedAt = 5000;
+    local.stats.totalRuns = 3; // a played device (a pristine one always loses)
     cloud.meta.updatedAt = 4000;
     cloud.inventory.push({ id: 'beaver_labubu_secret', type: 'secret_chase', unlockedAt: 1 });
     cloud.stats.highScore = 4321;

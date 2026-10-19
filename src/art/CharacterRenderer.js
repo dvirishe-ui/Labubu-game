@@ -13,6 +13,14 @@
  */
 import { CATALOG } from '../config/GachaDropTable.js';
 import { RES } from '../config/GameConfig.js';
+import * as W from './Wardrobe.js';
+
+/** Sleeve colour for the worn outfit (null = bare fur arms). */
+function sleeveFor(outfit) {
+  const look = W.lookOf(outfit);
+  if (look) return W.sleeveOf(look);
+  return outfit === 'raincoat' ? '#ffd23f' : null;
+}
 
 /** Resolution of the per-item icons (displayed at ICON_SCALE / ICON_RES). */
 export const ICON_RES = 0.75 * RES;
@@ -142,7 +150,10 @@ function drawLeg(ctx, hipX, hipY, angle, pal, shoes) {
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   // Foot / shoe
-  if (shoes === 'canvas_sneakers') {
+  const shoeLook = W.lookOf(shoes);
+  if (shoeLook) {
+    W.drawShoeFront(ctx, shoeLook);
+  } else if (shoes === 'canvas_sneakers') {
     roundRect(ctx, -8, 15, 20, 10, 4);
     ctx.fillStyle = '#4b7bd6';
     ctx.fill();
@@ -182,6 +193,11 @@ function drawArm(ctx, sx, sy, angle, pal, sleeve) {
 function drawTail(ctx, loadout, pal) {
   const doll = loadout.baseDoll;
   const tail = loadout.tail;
+  const tailLook = W.lookOf(tail);
+  if (tailLook) {
+    W.drawTailFront(ctx, tailLook);
+    return;
+  }
   // Beaver paddle tail (accessory) or the secret doll's built-in quilted tail.
   if (tail === 'beaver_paddle_tail' || doll === 'beaver_labubu_secret') {
     ctx.save();
@@ -304,7 +320,10 @@ function drawBody(ctx, loadout, pal) {
   }
 
   // Accessory outfits
-  if (outfit === 'lumberjack_vest') {
+  const outfitLook = W.lookOf(outfit);
+  if (outfitLook) {
+    W.drawOutfit(ctx, outfitLook, true);
+  } else if (outfit === 'lumberjack_vest') {
     plaid(ctx, 40, 98, 48, 46, '#c7362f', '#2a1414', '#f4c26b');
     // open front shows fur
     ctx.beginPath();
@@ -345,6 +364,9 @@ function drawBody(ctx, loadout, pal) {
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
   }
+  if (outfitLook) W.drawOutfitExtras(ctx, outfitLook, true);
+  const backLook = W.lookOf(loadout.back);
+  if (backLook) W.drawBackItemFront(ctx, backLook);
   ctx.restore();
 }
 
@@ -795,7 +817,10 @@ function drawHeadwear(ctx, loadout, pal) {
   ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
 
-  if (hw === 'beanie') {
+  const hwLook = W.lookOf(hw);
+  if (hwLook) {
+    W.drawHeadwear(ctx, hwLook, cx, cy, true);
+  } else if (hw === 'beanie') {
     ctx.beginPath();
     ctx.moveTo(cx - 33, cy - 12);
     ctx.bezierCurveTo(cx - 30, cy - 44, cx + 30, cy - 44, cx + 33, cy - 12);
@@ -918,9 +943,11 @@ export function drawCharacter(ctx, loadout, pose = POSES.idle) {
 
   // Back limbs
   drawFeatures(ctx, pal, 'back');
+  const backLook = W.lookOf(loadout.back);
+  if (backLook) W.drawBackItemBehind(ctx, backLook);
   drawTail(ctx, loadout, pal);
   drawLeg(ctx, 56, 134 - tuck, pose.legB, { ...pal, shade: shade(pal.shade, -20) }, loadout.shoes);
-  const sleeve = loadout.outfit === 'lumberjack_vest' ? null : loadout.outfit === 'raincoat' ? '#ffd23f' : null;
+  const sleeve = sleeveFor(loadout.outfit);
   drawArm(ctx, 50, 106 + bob, -pose.arm * 0.6, { ...pal, fur: shade(pal.shade, -10) }, sleeve);
 
   // Torso
@@ -959,6 +986,8 @@ function drawDuck(ctx, loadout, pal, pose) {
   ctx.translate(64, 156);
   ctx.scale(1.12, 0.72);
   ctx.translate(-64, -156);
+  const duckBack = W.lookOf(loadout.back);
+  if (duckBack) W.drawBackItemBehind(ctx, duckBack);
   drawTail(ctx, loadout, pal);
   drawLeg(ctx, 54, 134, pose.legB, { ...pal, shade: shade(pal.shade, -20) }, loadout.shoes);
   drawBody(ctx, loadout, pal);
@@ -1034,7 +1063,7 @@ export function bakeCharacterFrame(scene, key, loadout, poseName = 'idle', res =
  */
 export function previewLoadoutFor(itemId, baseDoll = 'labubu_classic') {
   const item = CATALOG[itemId];
-  const loadout = { baseDoll, outfit: null, headwear: null, tail: null, shoes: null };
+  const loadout = { baseDoll, outfit: null, headwear: null, tail: null, shoes: null, back: null };
   if (!item) return loadout;
   if (item.slot === 'doll') loadout.baseDoll = item.id;
   else loadout[item.slot] = item.id;
@@ -1048,7 +1077,8 @@ export function loadoutFromEquipped(equipped) {
     outfit: equipped.outfit || null,
     headwear: equipped.headwear || null,
     tail: equipped.tail || null,
-    shoes: equipped.shoes || null
+    shoes: equipped.shoes || null,
+    back: equipped.back || null
   };
 }
 
@@ -1091,6 +1121,11 @@ function backLeg(ctx, x, lift, pal, shoes) {
   ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
+  const shoeLook = W.lookOf(shoes);
+  if (shoeLook) {
+    W.drawShoeBack(ctx, shoeLook, x, footY, lift);
+    return;
+  }
   // The lifted foot shows its sole to the camera.
   const sole = shoes === 'canvas_sneakers' ? '#ffffff' : shade(pal.shade, -25);
   ellipse(ctx, x, footY + 2, 9, lift > 0.5 ? 7 : 5);
@@ -1145,7 +1180,10 @@ function backTorso(ctx, loadout, pal) {
   ctx.save();
   ellipse(ctx, 64, 120, 23, 20);
   ctx.clip();
-  if (outfit === 'lumberjack_vest' || (doll === 'beaver_labubu_secret' && !outfit)) {
+  const outfitLook = W.lookOf(outfit);
+  if (outfitLook) {
+    W.drawOutfit(ctx, outfitLook, false);
+  } else if (outfit === 'lumberjack_vest' || (doll === 'beaver_labubu_secret' && !outfit)) {
     plaid(ctx, 38, 98, 52, 46, outfit ? '#c7362f' : '#b8312c', '#1f1a24', '#f2d16b');
   } else if (outfit === 'raincoat') {
     ctx.fillStyle = '#ffd23f';
@@ -1159,6 +1197,15 @@ function backTorso(ctx, loadout, pal) {
   ctx.restore();
 
   // Back details over the torso
+  if (outfitLook) {
+    ellipse(ctx, 64, 120, 24, 21);
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    W.drawOutfitExtras(ctx, outfitLook, false);
+  }
+  const backLook = W.lookOf(loadout.back);
+  if (backLook) W.drawBackItemBack(ctx, backLook);
   if (outfit === 'raincoat') {
     // Hood folded at the neck
     ellipse(ctx, 64, 101, 16, 7);
@@ -1196,6 +1243,11 @@ function backTorso(ctx, loadout, pal) {
 
 function backTail(ctx, loadout, pal) {
   const doll = loadout.baseDoll;
+  const tailLook = W.lookOf(loadout.tail);
+  if (tailLook) {
+    W.drawTailBack(ctx, tailLook);
+    return;
+  }
   if (loadout.tail === 'beaver_paddle_tail' || doll === 'beaver_labubu_secret') {
     ctx.save();
     ellipse(ctx, 64, 150, 14, 22);
@@ -1241,7 +1293,10 @@ function backHeadwear(ctx, loadout) {
   const cy = 66;
   ctx.lineWidth = 2.6;
   ctx.strokeStyle = OUTLINE;
-  if (hw === 'beanie') {
+  const hwLook = W.lookOf(hw);
+  if (hwLook) {
+    W.drawHeadwear(ctx, hwLook, cx, cy, false);
+  } else if (hw === 'beanie') {
     ctx.beginPath();
     ctx.moveTo(cx - 33, cy - 6);
     ctx.bezierCurveTo(cx - 30, cy - 44, cx + 30, cy - 44, cx + 33, cy - 6);
@@ -1307,7 +1362,7 @@ function backHeadwear(ctx, loadout) {
 export function drawCharacterBack(ctx, loadout, pose = BACK_POSES.idle) {
   const dollDef = CATALOG[loadout.baseDoll] || CATALOG.labubu_classic;
   const pal = dollDef.palette;
-  const sleeve = loadout.outfit === 'raincoat' ? '#ffd23f' : null;
+  const sleeve = sleeveFor(loadout.outfit);
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.translate(0, DRAW_OFFSET_Y);

@@ -34,7 +34,7 @@ const FOIL_W = 196; // foil texture width
 const FOIL_SCALE = 0.77; // scaled to span the box's front-top edge
 const FOIL_Y = -62; // relative to the box centre
 
-const SLOT_LABEL = { doll: 'Figure', outfit: 'Outfit', headwear: 'Headwear', tail: 'Tail', shoes: 'Shoes' };
+const SLOT_LABEL = { doll: 'Figure', outfit: 'Outfit', headwear: 'Headwear', tail: 'Tail', shoes: 'Shoes', back: 'Wings & Packs' };
 
 export class UnboxingScene extends Phaser.Scene {
   constructor() {

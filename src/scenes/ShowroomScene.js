@@ -20,7 +20,8 @@ const TABS = [
   { slot: 'outfit', label: 'Outfits' },
   { slot: 'headwear', label: 'Hats' },
   { slot: 'tail', label: 'Tails' },
-  { slot: 'shoes', label: 'Shoes' }
+  { slot: 'shoes', label: 'Shoes' },
+  { slot: 'back', label: 'Wings' }
 ];
 
 // Grid inside the wardrobe panel (panel-local coordinates).
@@ -82,7 +83,7 @@ export class ShowroomScene extends Phaser.Scene {
     const [wx, wy, ws] = P.ward;
     this.wardrobe = this.add.container(wx, wy).setScale(ws);
     this.wardrobe.add(makePanel(this, 0, 0, 480, 610));
-    this.tabButtons = TABS.map((tab, i) => makeButton(this, 50 + i * 95, 42, tab.label, () => this.selectTab(tab.slot), { w: 88, h: 46, fontSize: 18, skin: 'blue', sound: 'click' }));
+    this.tabButtons = TABS.map((tab, i) => makeButton(this, 44 + i * 78.5, 42, tab.label, () => this.selectTab(tab.slot), { w: 74, h: 46, fontSize: 16, skin: 'blue', sound: 'click' }));
     this.wardrobe.add(this.tabButtons);
     this.gridList = new ScrollList(this, this.wardrobe, 0, GRID.y, 480, GRID.viewH);
     this.grid = this.gridList.inner;

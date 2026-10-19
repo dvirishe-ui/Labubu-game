@@ -140,6 +140,21 @@ A rainbow gate announces each zone. The first zone comes at 450 m, then one roug
 - **Labubu Pass:** a monthly season pass with 30 tiers. Every tier has a free reward and a Gold reward. The Gold track unlocks for 250 gems and includes exclusive skins.
 - **Blind boxes:** every box also holds bonus loot (coins, plus a chance of Head Starts, Score Boosters, gems, tickets or keys). You can open **5 at once** for a card-flip reveal, and **SKIP** works at any moment.
 
+### Login & cloud saves
+
+The game opens on a start screen that signs the player in and brings back their progress:
+
+- **As a claude.ai Artifact:** the save lives in the player's private space in the page's `db` storage, tied to their Claude account (`ClaudeAdapter`). Any phone or computer signed in to Claude gets the same coins, skins and level back.
+  - The leaderboard is a shared `scores` collection, and each player writes only their own row.
+  - Viewers who may only view see "view only" and keep progress on the device.
+- **In the store app:** the Supabase or REST backends described above.
+- **Guests:** progress stays on the device. The Settings menu has **Copy save code** and **Load save code**, which move the whole save to any device as one copy-paste code.
+- A brand-new, untouched device never overwrites real progress when it first syncs.
+
+### Wardrobe
+
+There are 75 collectibles across six slots: skins, outfits, hats, tails, shoes and **wings & packs** (angel, fairy, butterfly and bat wings, capes, backpacks, a jetpack). Clothing is data-driven: each item has a `look` (kind + colours), and `art/Wardrobe.js` draws it from the front and from behind. Adding an item is one line in `GachaDropTable.js`.
+
 ### Keeping kids coming back
 
 - **Praise pop-ups:** NICE! → GREAT! → AWESOME! → … → LEGENDARY!, with confetti, for dodge streaks and coin combos.

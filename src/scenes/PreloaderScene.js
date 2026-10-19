@@ -12,6 +12,7 @@ import { CATALOG } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
 import { bakePlayerTextures, bakeCharacterFrame, previewLoadoutFor, ICON_RES } from '../art/CharacterRenderer.js';
 import { outlinedText, textStyle } from '../ui/UIKit.js';
+import { accountReady } from '../systems/Account.js';
 
 export class PreloaderScene extends Phaser.Scene {
   constructor() {
@@ -45,6 +46,7 @@ export class PreloaderScene extends Phaser.Scene {
   }
 
   create() {
+    accountReady(); // start signing in while the art bakes
     const jobs = [
       { label: 'Dressing your Labubu…', run: () => bakePlayerTextures(this, Services.save.data.equipped) },
       ...Object.keys(CATALOG).map((id) => ({
@@ -54,13 +56,16 @@ export class PreloaderScene extends Phaser.Scene {
     ];
     let i = 0;
     // One bake per frame keeps the UI responsive on low-end phones.
+    const perTick = 3;
     this.time.addEvent({
       delay: 16,
-      repeat: jobs.length - 1,
+      repeat: Math.ceil(jobs.length / perTick) - 1,
       callback: () => {
-        const job = jobs[i++];
-        this.status.setText(job.label);
-        job.run();
+        for (let k = 0; k < perTick && i < jobs.length; k++) {
+          const job = jobs[i++];
+          this.status.setText(job.label);
+          job.run();
+        }
         this.setProgress(0.2 + 0.8 * (i / jobs.length));
         if (i === jobs.length) this.time.delayedCall(250, () => this.finish());
       }
@@ -69,6 +74,6 @@ export class PreloaderScene extends Phaser.Scene {
 
   finish() {
     this.scene.launch('UIOverlay');
-    this.scene.start('MainMenu');
+    this.scene.start('Login');
   }
 }

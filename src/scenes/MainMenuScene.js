@@ -17,6 +17,7 @@ import { XP } from '../config/ProgressionConfig.js';
 import { showRewardedAd } from '../systems/AdService.js';
 import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
+import { exportSaveCode, importSaveCode } from '../systems/SaveCode.js';
 import { canFullscreen, toggleFullscreen } from '../ui/Fullscreen.js';
 import { canSpin, spinWheel } from '../systems/DailyRewards.js';
 import {
@@ -348,7 +349,7 @@ export class MainMenuScene extends Phaser.Scene {
   updateSyncPill({ status, adapter } = {}) {
     if (!this.syncText) return;
     const map = {
-      synced: ['Cloud saved', 0x4cd964],
+      synced: ['Cloud saved ☁', 0x4cd964],
       pending: ['Sync pending', 0xffc93c],
       syncing: ['Syncing…', 0x3fa9f5],
       offline: ['Offline', 0x9aa0a6],
@@ -602,7 +603,7 @@ export class MainMenuScene extends Phaser.Scene {
   /** Audio toggles, sync details, rename and reset. */
   showSettings() {
     const d = Services.save.data;
-    const modal = new Modal(this, { width: 620, height: 560, title: 'Settings', onClose: () => this.refresh() });
+    const modal = new Modal(this, { width: 620, height: 640, title: 'Settings', onClose: () => this.refresh() });
     const sfxBtn = makeButton(
       this,
       170,
@@ -633,12 +634,16 @@ export class MainMenuScene extends Phaser.Scene {
     const info = [
       `Player: ${d.profile.displayName}`,
       `ID: ${d.profile.playerId.slice(0, 8)}…`,
-      `Backend: ${sync.adapter.kind === 'none' ? 'offline only (no cloud configured)' : sync.adapter.kind}`,
+      `Account: ${{ claude: 'Claude cloud save', supabase: 'cloud save', rest: 'cloud save' }[sync.adapter.enabled ? sync.adapter.kind : ''] || 'guest (saved on this device)'}`,
       `Status: ${sync.status}${d.meta.isDirty ? ' · unsynced changes' : ''}`,
       `Last cloud sync: ${last}`,
       `Runs ${d.stats.totalRuns} · Boxes ${d.stats.boxesOpened} · Coins ${d.stats.coinsCollectedTotal}`
     ];
     modal.add([sfxBtn, musicBtn, this.add.text(60, 150, info.join('\n'), textStyle(19, '#5a4a6a', { lineSpacing: 8 }))]);
+    modal.add([
+      makeButton(this, 170, 480, 'Copy save code', () => this.copySaveCode(), { w: 250, h: 52, fontSize: 20, skin: 'purple' }),
+      makeButton(this, 450, 480, 'Load save code', () => this.loadSaveCode(modal), { w: 250, h: 52, fontSize: 20, skin: 'purple' })
+    ]);
     modal.add(
       makeButton(this, 170, 400, 'Sync now', () => sync.syncNow({ force: true }), { w: 250, h: 56, fontSize: 22, color: COLORS.rare, colorDark: 0x2b7bc0 })
     );
@@ -647,7 +652,7 @@ export class MainMenuScene extends Phaser.Scene {
       makeButton(
         this,
         310,
-        480,
+        566,
         'Reset progress',
         (btn) => {
           // Two-tap confirmation (window.confirm() is blocked in embedded WebViews).
@@ -669,6 +674,35 @@ export class MainMenuScene extends Phaser.Scene {
         { w: 300, h: 50, fontSize: 20, color: 0xe8324b, colorDark: 0xa31d30 }
       )
     );
+  }
+
+  /** Save code: copy the whole save to move it to another device. */
+  async copySaveCode() {
+    const code = await exportSaveCode(Services.save.data);
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(code);
+      copied = true;
+    } catch {
+      /* clipboard blocked (embedded page) - show the code instead */
+    }
+    if (copied) Services.bus.emit('ui:toast', { text: 'Save code copied!', sub: 'Paste it on your other device: Settings → Load save code', color: COLORS.mint });
+    else await askText({ title: 'Copy this save code (select all, then copy)', value: code, maxLength: 200000, multiline: true, okLabel: 'Done' });
+  }
+
+  async loadSaveCode(modal) {
+    const code = await askText({ title: 'Paste your save code', value: '', maxLength: 200000, multiline: true, okLabel: 'Load' });
+    if (!code) return;
+    try {
+      await importSaveCode(Services.save, code);
+      bakePlayerTextures(this, Services.save.data.equipped);
+      Services.bus.emit('ui:toast', { text: 'Progress loaded!', color: COLORS.mint });
+      modal?.close();
+      this.scene.restart();
+    } catch {
+      Services.audio.play('error');
+      Services.bus.emit('ui:toast', { text: "That code didn't work", sub: 'Copy the whole code and try again', color: COLORS.pink });
+    }
   }
 
   /** Daily Lucky Spin: one free spin of the prize wheel per day. */
