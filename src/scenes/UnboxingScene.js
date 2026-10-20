@@ -49,6 +49,11 @@ export class UnboxingScene extends Phaser.Scene {
     this.count = Math.max(1, data?.count || 1);
     this.skipped = false;
     this.eventsSent = false;
+    // The scene object is reused by "Open another": forget the last box's
+    // objects (they were destroyed with it) so SKIP builds fresh ones.
+    this.figure = null;
+    this.banner = null;
+    this.hint = null;
     this.phase = 'drop';
     this.tearProgress = 0;
     this.lastTearSfx = 0;
@@ -355,17 +360,23 @@ export class UnboxingScene extends Phaser.Scene {
     card.add(outlinedText(this, x0 + 260, 127, tier.label.toUpperCase(), 38, '#ffffff'));
     card.add(this.add.text(x0 + 260, 196, item.name, textStyle(34, COLORS.text, { align: 'center', wordWrap: { width: 470 } })).setOrigin(0.5));
     card.add(this.add.text(x0 + 260, 234, `${SERIES_NAME} · ${SLOT_LABEL[item.slot]}`, textStyle(17, '#8a7a9a')).setOrigin(0.5));
-    card.add(this.add.text(x0 + 40, 258, item.description, textStyle(19, '#5a4a6a', { wordWrap: { width: 440 }, lineSpacing: 4 })));
+    // What you got: the item itself on a rarity card (always visible, even
+    // when the big figure is off-screen or the item is small, like a tail).
+    card.add(uiImage(this, x0 + 28 - 6, 254 - 4, cardKey(this, 116, 146, item.rarity)));
+    const pic = this.add.image(x0 + 86, 318, `icon_${item.id}`).setScale((1.0 * 0.75) / ICON_RES);
+    card.add(pic);
+    this.tweens.add({ targets: pic, y: 312, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.easeInOut' });
+
+    const desc = this.add.text(x0 + 160, 260, item.description, textStyle(18, '#5a4a6a', { wordWrap: { width: 330 }, lineSpacing: 3 }));
+    card.add(desc);
+    const perkLines = describePerks(item.perks);
+    card.add(this.add.text(x0 + 160, 272 + desc.height, perkLines.map((l) => `• ${l}`).join('\n'), textStyle(17, '#2f9a7a', { lineSpacing: 4, wordWrap: { width: 330 } })));
 
     // Skins carry a run multiplier - show it big, like a power stat.
-    let perkY = 352;
     if (item.slot === 'doll' && tier.multiplier > 1) {
-      card.add(uiImage(this, x0 + 130 - 6, 336 - 4, buttonKey(this, 260, 48, RIBBON_SKIN[item.rarity], false)));
-      card.add(outlinedText(this, x0 + 260, 358, `x${tier.multiplier} SCORE & COINS`, 24));
-      perkY = 400;
+      card.add(uiImage(this, x0 + 130 - 6, 410 - 4, buttonKey(this, 260, 44, RIBBON_SKIN[item.rarity], false)));
+      card.add(outlinedText(this, x0 + 260, 430, `x${tier.multiplier} SCORE & COINS`, 22));
     }
-    const perkLines = describePerks(item.perks);
-    card.add(this.add.text(x0 + 40, perkY, perkLines.map((l) => `• ${l}`).join('\n'), textStyle(19, '#2f9a7a', { lineSpacing: 6, wordWrap: { width: 440 } })));
 
     const bonus = sumRewards(this.result.bonus || []);
     if (bonus.length) {
