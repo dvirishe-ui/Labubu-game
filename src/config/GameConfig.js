@@ -37,10 +37,31 @@ export let HEIGHT = 720;
 export let PORTRAIT = false;
 export let RES = 1;
 
+/**
+ * CSS px kept free at the top of the screen for a host app's floating
+ * buttons: the Claude phone app draws its ✕ and ⋯ over the top corners of an
+ * Artifact, which would cover the coin bar and the pause button. Only when
+ * the game is embedded (framed) on a phone held upright.
+ */
+export function hostSafeTop() {
+  if (typeof window === 'undefined') return 0;
+  let framed;
+  try {
+    framed = window.self !== window.top;
+  } catch {
+    framed = true;
+  }
+  const phone = (navigator.maxTouchPoints || 0) > 0 && Math.min(window.innerWidth, window.innerHeight) < 600;
+  return framed && phone && window.innerHeight > window.innerWidth ? 64 : 0;
+}
+
 /** Recomputes the viewport from the window. Returns true if the logical size changed. */
 export function updateViewport() {
   if (typeof window === 'undefined') return false;
-  const v = computeViewport(window.innerWidth || 1280, window.innerHeight || 720, window.devicePixelRatio || 1);
+  const safe = hostSafeTop();
+  const el = typeof document !== 'undefined' && document.getElementById('game');
+  if (el) el.style.top = `${safe}px`;
+  const v = computeViewport(window.innerWidth || 1280, (window.innerHeight || 720) - safe, window.devicePixelRatio || 1);
   const changed = v.width !== WIDTH || v.height !== HEIGHT;
   WIDTH = v.width;
   HEIGHT = v.height;
@@ -50,7 +71,7 @@ export function updateViewport() {
 }
 if (typeof window !== 'undefined') {
   updateViewport();
-  RES = computeViewport(window.innerWidth || 1280, window.innerHeight || 720, window.devicePixelRatio || 1).res;
+  RES = computeViewport(window.innerWidth || 1280, (window.innerHeight || 720) - hostSafeTop(), window.devicePixelRatio || 1).res;
 }
 
 export const STORAGE_KEY = 'labubu_blindbox_save_v1';

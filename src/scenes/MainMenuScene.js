@@ -143,10 +143,13 @@ export class MainMenuScene extends Phaser.Scene {
   buildTopRight() {
     const L = this.L;
     const fs = canFullscreen();
-    const right = WIDTH - (fs ? 50 : 120);
     const y = L.iconsY;
+    // Icon buttons packed against the right edge (no gap when fullscreen is unsupported).
+    const right = WIDTH - 50;
+    const slots = fs ? 4 : 3;
+    const leftmost = right - (slots - 1) * 70;
     // Sync status pill
-    this.syncPill = this.add.container(L.syncX ?? right - 335, y);
+    this.syncPill = this.add.container(L.syncX ?? leftmost - 235, y);
     this.syncPillBg = this.add.graphics();
     this.syncDot = this.add.circle(-62, 0, 8, 0x9aa0a6);
     this.syncText = this.add.text(-48, 0, '', textStyle(18, '#ffffff', { stroke: '#3d2a52', strokeThickness: 3 })).setOrigin(0, 0.5);
@@ -155,9 +158,9 @@ export class MainMenuScene extends Phaser.Scene {
     this.syncPill.setSize(170, 40).setInteractive({ useHandCursor: true });
     this.syncPill.on('pointerup', () => Services.sync.syncNow({ force: true }));
 
-    makeIconButton(this, right - 210, y, '♛', () => this.showLeaderboard(), { size: 54 });
-    this.muteBtn = makeIconButton(this, right - 140, y, '♪', () => this.toggleSound(), { size: 54 });
-    makeIconButton(this, right - 70, y, '≡', () => this.showSettings(), { size: 54 });
+    makeIconButton(this, leftmost, y, '♛', () => this.showLeaderboard(), { size: 54 });
+    this.muteBtn = makeIconButton(this, leftmost + 70, y, '♪', () => this.toggleSound(), { size: 54 });
+    makeIconButton(this, leftmost + 140, y, '≡', () => this.showSettings(), { size: 54 });
     if (fs) {
       // True fullscreen (Android / desktop; hidden where unsupported)
       const btn = makeIconButton(this, right, y, '', () => toggleFullscreen(), { size: 54 });
