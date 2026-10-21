@@ -26,6 +26,10 @@ import { ShowroomScene } from './scenes/ShowroomScene.js';
 import { ShopScene } from './scenes/ShopScene.js';
 import { PassScene } from './scenes/PassScene.js';
 import { LoginScene } from './scenes/LoginScene.js';
+import { ArcadeScene } from './scenes/arcade/ArcadeScene.js';
+import { ClawScene } from './scenes/arcade/ClawScene.js';
+import { MemoryScene } from './scenes/arcade/MemoryScene.js';
+import { CatcherScene } from './scenes/arcade/CatcherScene.js';
 import { UIOverlayScene } from './scenes/UIOverlayScene.js';
 
 /** Creates every singleton system and registers it in the Services locator. */
@@ -94,7 +98,7 @@ const config = {
   // Phaser caps frame delta at 1000/min ms; RunnerScene uses the same cap.
   fps: { target: 60, min: 10 },
   // UIOverlay is last so it always renders on top of every other scene.
-  scene: [BootScene, PreloaderScene, LoginScene, MainMenuScene, RunnerScene, UnboxingScene, ShowroomScene, ShopScene, PassScene, UIOverlayScene]
+  scene: [BootScene, PreloaderScene, LoginScene, MainMenuScene, RunnerScene, UnboxingScene, ShowroomScene, ShopScene, PassScene, ArcadeScene, ClawScene, MemoryScene, CatcherScene, UIOverlayScene]
 };
 
 /**

@@ -167,7 +167,7 @@ export function buyTicket(saveManager) {
 /** Shop price of an item, e.g. { gems: 80, popCoins: 2500 } or null (box-exclusive). */
 export function skinPrice(itemId) {
   const item = CATALOG[itemId];
-  if (!item) return null;
+  if (!item || item.exclusive) return null; // exclusives are won, never sold
   return SKIN_PRICES[item.rarity] || null;
 }
 

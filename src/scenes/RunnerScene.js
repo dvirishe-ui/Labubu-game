@@ -103,6 +103,11 @@ export class RunnerScene extends Phaser.Scene {
     this.scoreBonus = 0;
     this.boostOffer = null;
     this.doubleHints = 0;
+    // Per-run flags (the scene object is reused by PLAY AGAIN).
+    this.beatBest = false;
+    this.passedBestDist = false;
+    this.bestGateDone = false;
+    this.qualityChecked = false;
     this.rowLanes = [];
     this.drawDistance = RUNNER.PLAYER_Z + RUNNER.DRAW_DISTANCE;
     this.coinBank = 0;
@@ -370,7 +375,11 @@ export class RunnerScene extends Phaser.Scene {
     // Bitmap text: updating these every frame costs nothing (no texture re-upload).
     h.score = hudText(this, 0, 0, '0', 46).setOrigin(0, 0).setDepth(hudDepth + 1);
     h.mult = hudText(this, 0, 0, 'x1', 30, '#ffe066').setDepth(hudDepth + 1).setOrigin(0, 0.5);
-    h.dist = hudText(this, 0, 0, '0 m', 19).setOrigin(0, 0).setDepth(hudDepth + 1);
+    h.dist = hudText(this, 0, 0, '0 m', 17).setOrigin(0, 0).setDepth(hudDepth + 1);
+    // Live high score, Subway Surfers style
+    this.bestScore = Services.save.data.stats.highScore || 0;
+    this.bestDistance = Services.save.data.stats.bestDistance || 0;
+    h.best = hudText(this, 0, 0, this.bestScore > 0 ? `BEST ${this.bestScore.toLocaleString('en-US')}` : 'SET A RECORD!', 17, '#ffe066').setOrigin(1, 0).setDepth(hudDepth + 1);
     h.coinIcon = this.add.image(0, 0, 'coin').setScale(0.85).setDepth(hudDepth + 1);
     h.coins = hudText(this, 0, 0, '0', 34, '#ffe066').setOrigin(1, 0.5).setDepth(hudDepth + 1);
 
@@ -414,11 +423,12 @@ export class RunnerScene extends Phaser.Scene {
     const h = this.hud;
     const W = WIDTH;
     h.scoreBg.clear();
-    h.scoreBg.fillStyle(0x000000, 0.3).fillRoundedRect(14, 12, 300, 96, 26);
+    h.scoreBg.fillStyle(0x000000, 0.3).fillRoundedRect(14, 12, 350, 96, 26);
     h.scoreBg.fillStyle(0x000000, 0.3).fillRoundedRect(W - 230, 12, 140, 60, 30);
     h.score.setPosition(28, 14);
     h.mult.setPosition(232, 42);
-    h.dist.setPosition(30, 74);
+    h.dist.setPosition(30, 76);
+    h.best.setPosition(346, 76);
     h.coinIcon.setPosition(W - 200, 42);
     h.coins.setPosition(W - 104, 42);
     h.pause.setPosition(W - 46, 44);
@@ -461,6 +471,19 @@ export class RunnerScene extends Phaser.Scene {
       h.coinIcon.setScale(1.15);
       this.tweens.add({ targets: h.coinIcon, scale: 0.85, duration: 160 });
     }
+    // Beat your high score mid-run: big celebration.
+    if (!this.beatBest && this.bestScore > 0 && this.score > this.bestScore) {
+      this.beatBest = true;
+      h.best.setText('NEW BEST!');
+      this.tweens.add({ targets: h.best, scale: 1.25, yoyo: true, repeat: -1, duration: 400 });
+      this.popText('NEW HIGH SCORE!', '#ffe066');
+      this.confetti.explode(80);
+      Services.audio.play('highScore');
+    }
+    if (!this.passedBestDist && this.bestDistance > 150 && this.distance > this.bestDistance) {
+      this.passedBestDist = true;
+      floatText(this, WIDTH / 2, HEIGHT * 0.4, 'Past your best distance!', '#6ee7a8', 30);
+    }
     const magnet = this.gameTime < this.magnetUntil;
     h.magnetBar.graphics.setVisible(magnet);
     if (magnet) h.magnetBar.set((this.magnetUntil - this.gameTime) / (RUNNER.SUPER_MAGNET_DURATION_MS * this.dur.magnet));
@@ -502,7 +525,7 @@ export class RunnerScene extends Phaser.Scene {
       const dy = y - g.y;
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE) return;
       g.fired = true;
-      if (Math.abs(dx) > Math.abs(dy)) this.player.moveLane(dx > 0 ? 1 : -1);
+      if (Math.abs(dx) > Math.abs(dy)) this.steer(dx > 0 ? 1 : -1);
       else if (dy < 0) this.player.jump();
       else {
         this.player.setJumpHeld(false);
@@ -540,8 +563,8 @@ export class RunnerScene extends Phaser.Scene {
       kb.on(`keydown-${key}`, jumpDown);
       kb.on(`keyup-${key}`, jumpUp);
     }
-    for (const key of ['LEFT', 'A']) kb.on(`keydown-${key}`, (e) => !e.repeat && live() && this.player.moveLane(-1));
-    for (const key of ['RIGHT', 'D']) kb.on(`keydown-${key}`, (e) => !e.repeat && live() && this.player.moveLane(1));
+    for (const key of ['LEFT', 'A']) kb.on(`keydown-${key}`, (e) => !e.repeat && live() && this.steer(-1));
+    for (const key of ['RIGHT', 'D']) kb.on(`keydown-${key}`, (e) => !e.repeat && live() && this.steer(1));
     for (const key of ['DOWN', 'S']) {
       kb.on(`keydown-${key}`, (e) => !e.repeat && live() && this.player.duck(true));
       kb.on(`keyup-${key}`, () => this.player.releaseDuck());
@@ -550,13 +573,36 @@ export class RunnerScene extends Phaser.Scene {
     for (const key of ['ESC', 'P']) kb.on(`keydown-${key}`, () => (this.isPaused ? this.resumeGame() : this.pauseGame()));
   }
 
+  /**
+   * Lane change. Swiping off the road from an outer lane is a crash - unless
+   * Labubu is in the air (jumping over the kerb is fine), like Subway Surfers.
+   */
+  steer(dir) {
+    const p = this.player;
+    if (p.moveLane(dir)) return;
+    if (!this.started || this.isOver || p.isCrashed || this.headStart || !p.isGrounded) return;
+    const result = p.hit();
+    const f = this.project(p.x + dir, 1, RUNNER.PLAYER_Z);
+    if (result === 'shield') {
+      Services.audio.play('shieldBreak');
+      this.sparkle.explode(24, f.x, f.y);
+      this.popText('SHIELD SAVE!', '#8fd3ff');
+    } else if (result === 'crash') {
+      this.cameras.main.shake(200, 0.01);
+      this.popText('OFF THE ROAD!', '#ff5a6e');
+      this.onCrash('edge');
+    } else {
+      this.stumble(); // star / boost: just a bonk
+    }
+  }
+
   // -------------------------------------------------------------------------- countdown
 
   startCountdown() {
     Services.audio.stopMusic();
     const step = RUNNER.COUNTDOWN_STEP_MS;
     const hint = this.add
-      .text(WIDTH / 2, HEIGHT * 0.5, 'Swipe ← → to switch lanes\nTap to jump · tap again = DOUBLE JUMP\nSwipe ↓ to roll · tap on GO! = rocket start', textStyle(26, '#ffffff', { stroke: '#3d2a52', strokeThickness: 6, align: 'center', lineSpacing: 6 }))
+      .text(WIDTH / 2, HEIGHT * 0.5, 'Swipe ← → to switch lanes (don\'t fall off the road!)\nTap to jump · tap again = DOUBLE JUMP\nSwipe ↓ to roll · tap on GO! = rocket start', textStyle(26, '#ffffff', { stroke: '#3d2a52', strokeThickness: 6, align: 'center', lineSpacing: 6 }))
       .setOrigin(0.5)
       .setDepth(21000);
     const show = (label, color, big) => {
@@ -1034,6 +1080,12 @@ export class RunnerScene extends Phaser.Scene {
     if (this.nextGate && m + gap > this.nextGate.start) {
       O.spawn('arch', 1, z + Math.max(0, this.nextGate.start - m), `zone_${this.nextGate.type}`);
       this.nextGate = this.zones.nextZone(this.nextGate.end);
+    }
+
+    // Gold "YOUR BEST" gate at the player's record distance.
+    if (!this.bestGateDone && this.bestDistance > 150 && m + gap > this.bestDistance) {
+      this.bestGateDone = true;
+      O.spawn('arch', 1, z + Math.max(0, this.bestDistance - m), 'zone_best');
     }
 
     // Head Start flight: only a high coin trail until the rocket lands.

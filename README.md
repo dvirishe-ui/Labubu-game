@@ -137,7 +137,7 @@ A rainbow gate announces each zone. The first zone comes at 450 m, then one roug
 - Both are offered for the first seconds of a run. You get them from boxes, the pass and level-ups, or buy them in the Shop's **Boosts** tab.
 - **Upgrades:** spend coins to make Magnet, Star and Dash last longer, and to make Head Start go further (5 levels each).
 - **XP and player level:** XP comes from runs, boxes and quests. Every level-up pays a reward.
-- **Labubu Pass:** a monthly season pass with 30 tiers. Every tier has a free reward and a Gold reward. The Gold track unlocks for 250 gems and includes exclusive skins.
+- **Labubu Pass:** a monthly season pass with **60 tiers**, and each tier needs more XP than the last (200 → 672 XP). Every tier has a free reward and a Gold reward. The Gold track unlocks for 250 gems and ends with the exclusive Pass Champion skin.
 - **Blind boxes:** every box also holds bonus loot (coins, plus a chance of Head Starts, Score Boosters, gems, tickets or keys). You can open **5 at once** for a card-flip reveal, and **SKIP** works at any moment.
 
 ### Login & cloud saves
@@ -154,6 +154,24 @@ The game opens on a start screen that signs the player in and brings back their 
 ### Wardrobe
 
 There are 75 collectibles across six slots: skins, outfits, hats, tails, shoes and **wings & packs** (angel, fairy, butterfly and bat wings, capes, backpacks, a jetpack). Clothing is data-driven: each item has a `look` (kind + colours), and `art/Wardrobe.js` draws it from the front and from behind. Adding an item is one line in `GachaDropTable.js`.
+
+### Arcade mini-games
+
+There are 3 free plays a day. Extra plays cost 1 ticket or 10 gems. Each game has an **exclusive prize** you can't get from boxes or the Shop:
+
+| Game | How to play | Prizes |
+| --- | --- | --- |
+| Claw Machine | The claw swings by itself; tap DROP to grab a capsule and carry it to the chute | Coins, gems, tickets, keys, Head Starts, or the slippery glowing capsule with **Neon Arcade Labubu** |
+| Memory Match | Find 6 pairs; fewer moves earn more stars | Coins, a golden key for 3 stars, and **Memory Master Shades** the first time |
+| Coin Catcher | Catch coins, gems and gifts for 30 s and dodge rocks (3 lives) | Coins, a key at 60 points, and the **Lucky Gift Pack** at 100 |
+
+The last Gold tier of the pass awards the exclusive **Pass Champion** skin.
+
+### In-run high score and road edges
+
+- The HUD shows your best score while you run. Beating it triggers a "NEW HIGH SCORE!" celebration.
+- A gold **YOUR BEST** gate marks your record distance on the road.
+- Like Subway Surfers, swiping off the road from an outer lane is a crash, unless you're in the air.
 
 ### Keeping kids coming back
 

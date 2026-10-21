@@ -139,7 +139,14 @@ export class ShowroomScene extends Phaser.Scene {
     const tier = RARITY_TIERS[item.rarity];
     this.detailTitle.setText(owned ? item.name : `??? (${tier.label})`);
     this.detailTitle.setColor(Phaser.Display.Color.IntegerToColor(tier.dark).rgba);
-    const how = item.rarity === 'secret' ? 'Mystery! Only found in blind boxes.' : 'Not collected yet. Find it in blind boxes or buy it in the Shop!';
+    const how =
+      item.exclusive === 'arcade'
+        ? 'Arcade exclusive! Win it in the Arcade mini-games.'
+        : item.exclusive === 'pass'
+          ? 'Gold Pass exclusive! Reach tier 60 of the Labubu Pass.'
+          : item.rarity === 'secret'
+            ? 'Mystery! Only found in blind boxes.'
+            : 'Not collected yet. Find it in blind boxes or buy it in the Shop!';
     this.detailBody.setText(owned ? `${item.description}\n\n${describePerks(item.perks, item).map((l) => `• ${l}`).join('\n')}` : how);
   }
 

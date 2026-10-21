@@ -106,8 +106,9 @@ export class MainMenuScene extends Phaser.Scene {
         quests: [cx - 125, 490],
         shop: [cx + 125, 572],
         pass: [cx - 125, 572],
+        arcade: [cx, 642],
         level: [120, 96],
-        collection: [cx, 640],
+        collection: [cx, 700],
         box: { x: WIDTH - 400, y: 90, s: 1 },
         bank: { x: WIDTH - 400, y: 430, s: 1 }
       };
@@ -126,6 +127,7 @@ export class MainMenuScene extends Phaser.Scene {
       spin: [110, feet - 150],
       shop: [WIDTH - 110, feet - 72],
       pass: [110, feet - 72],
+      arcade: [WIDTH - 110, feet - 228],
       level: [258, 100],
       logo: [WIDTH / 2, 190, 84],
       subtitle: [WIDTH / 2, 252],
@@ -231,6 +233,11 @@ export class MainMenuScene extends Phaser.Scene {
     this.passBadgeText = this.add.text(0, 0, '0', textStyle(18, '#ffffff')).setOrigin(0.5);
     this.passBadge.add([this.add.circle(0, 0, 17, 0xe8324b).setStrokeStyle(3, 0xffffff), this.passBadgeText]);
     this.tweens.add({ targets: this.passBadge, scale: 1.2, yoyo: true, repeat: -1, duration: 500 });
+
+    // Arcade: mini-games with exclusive prizes
+    const [ax, ay] = L.arcade;
+    this.arcadeBtn = makeButton(this, ax, ay, 'ARCADE', () => this.go('Arcade'), { w: L.portrait ? 180 : 210, h: 58, fontSize: 26, skin: 'blue', icon: 'key', iconScale: 0.6 });
+    this.tweens.add({ targets: this.arcadeBtn, scale: 1.05, yoyo: true, repeat: -1, duration: 750, ease: 'Sine.easeInOut' });
 
     // Player level chip (tap = pass)
     const [lx, ly] = L.level;

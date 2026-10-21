@@ -449,6 +449,38 @@ const WARDROBE = [
 ];
 for (const item of WARDROBE) CATALOG[item.id] = item;
 
+/**
+ * Exclusives: never in boxes or the shop. `exclusive` says where to win them
+ * (the Arcade mini-games or the last tier of the Gold pass).
+ */
+const EXCLUSIVES = [
+  {
+    id: 'neon_labubu',
+    name: 'Neon Arcade Labubu',
+    slot: 'doll',
+    type: 'base',
+    rarity: 'legendary',
+    exclusive: 'arcade',
+    description: 'ARCADE EXCLUSIVE! Glows like a game machine. Win it in the Claw Machine.',
+    palette: pal('#39e6ff', '#1f9fd6', '#ff6fd8', '#eaffff', '#0a1630', '#ff6fd8', { features: ['sparkles'] }),
+    perks: {}
+  },
+  {
+    id: 'champion_labubu',
+    name: 'Pass Champion',
+    slot: 'doll',
+    type: 'base',
+    rarity: 'legendary',
+    exclusive: 'pass',
+    description: 'GOLD PASS EXCLUSIVE! Only for players who reach tier 60.',
+    palette: pal('#ff7ac8', '#d94a9a', '#ffd23f', '#fff0f8', '#2a0f20', '#ffd23f', { features: ['tiara', 'sparkles'] }),
+    perks: { coinMultiplier: 0.05 }
+  },
+  { ...wear('brainy_shades', 'Memory Master Shades', 'headwear', 'epic', 'ARCADE EXCLUSIVE! Win 3 stars in Memory Match.', { kind: 'shades', color: '#2fc24f' }), exclusive: 'arcade' },
+  { ...wear('gift_backpack', 'Lucky Gift Pack', 'back', 'epic', 'ARCADE EXCLUSIVE! Catch 100 points in Coin Catcher.', { kind: 'backpack', color: '#ffc93c' }, { magnetBonus: 1 }), exclusive: 'arcade' }
+];
+for (const item of EXCLUSIVES) CATALOG[item.id] = { inPool: false, ...item };
+
 /** Pre-bucketed pool: rarity -> array of droppable item ids. */
 export const DROP_POOL = RARITY_ORDER.reduce((pool, rarity) => {
   pool[rarity] = Object.values(CATALOG)

@@ -1805,7 +1805,8 @@ function makeAdventure(scene) {
   });
 
   // Zone gates: a rainbow arch with the zone's name across the road.
-  for (const z of Object.values(ZONES)) {
+  // (plus the gold 'YOUR BEST' gate placed at the player's record distance)
+  for (const z of [...Object.values(ZONES), { key: 'best', name: 'YOUR BEST', arch: 0xffb400 }]) {
     canvasTexture(scene, `zone_${z.key}`, 640, 380, (ctx) => {
       const c = `#${z.arch.toString(16).padStart(6, '0')}`;
       // pillars

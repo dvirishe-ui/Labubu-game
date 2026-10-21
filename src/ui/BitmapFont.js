@@ -12,7 +12,7 @@ import { RES, FONT_DISPLAY } from '../config/GameConfig.js';
 
 export const HUD_FONT = 'lilita';
 const SIZE = 72; // logical glyph size; the atlas is drawn at SIZE * RES pixels
-const CHARS = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('') + '·×←→↓▸✓⇈•';
+const CHARS = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('') + '·×←→↓▸✓⇈•★☆♥';
 
 export function makeBitmapFont(scene, key = HUD_FONT) {
   if (scene.cache.bitmapFont.exists(key)) return;

@@ -71,8 +71,14 @@ export function levelReward(level) {
   return rewards;
 }
 
-/** Season pass (one season per calendar month). */
-export const PASS = { TIERS: 30, XP_PER_TIER: 180, GOLD_PRICE_GEMS: 250 };
+/**
+ * Season pass (one season per calendar month): 60 tiers, and each tier needs
+ * a bit more XP than the one before (200 XP for tier 1 ... 672 XP for tier 60).
+ */
+export const PASS = { TIERS: 60, BASE_XP: 200, XP_STEP: 8, GOLD_PRICE_GEMS: 250 };
+
+/** XP needed to go from tier t-1 to tier t. */
+export const tierXp = (t) => PASS.BASE_XP + PASS.XP_STEP * (t - 1);
 
 const FREE_SPECIAL = {
   5: { type: 'goldenKeys', amount: 1 },
@@ -80,7 +86,13 @@ const FREE_SPECIAL = {
   15: { type: 'goldenKeys', amount: 2 },
   20: { type: 'item', id: 'pirate_captain' },
   25: { type: 'scoreBooster', amount: 3 },
-  30: { type: 'gems', amount: 150 }
+  30: { type: 'gems', amount: 150 },
+  35: { type: 'goldenKeys', amount: 2 },
+  40: { type: 'item', id: 'fox_tail' },
+  45: { type: 'headStart', amount: 3 },
+  50: { type: 'item', id: 'top_hat' },
+  55: { type: 'gems', amount: 200 },
+  60: { type: 'item', id: 'super_suit' }
 };
 const GOLD_SPECIAL = {
   1: { type: 'gems', amount: 30 },
@@ -88,7 +100,12 @@ const GOLD_SPECIAL = {
   12: { type: 'goldenKeys', amount: 3 },
   18: { type: 'headStart', amount: 3 },
   24: { type: 'item', id: 'dragon_labubu' },
-  30: { type: 'item', id: 'ice_queen' }
+  30: { type: 'item', id: 'ice_queen' },
+  36: { type: 'item', id: 'witch_hat' },
+  42: { type: 'item', id: 'mermaid_tail' },
+  48: { type: 'item', id: 'fairy_wings' },
+  54: { type: 'item', id: 'royal_gown' },
+  60: { type: 'item', id: 'champion_labubu' }
 };
 const FREE_CYCLE = [
   { type: 'popCoins', amount: 200 },

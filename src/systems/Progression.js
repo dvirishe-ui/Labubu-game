@@ -3,7 +3,7 @@
  * XP, player level (with level-up rewards) and the monthly season pass
  * ("Labubu Pass") with a free track and a Gold track. Pure logic on the save.
  */
-import { XP, PASS, levelStep, levelReward, passReward } from '../config/ProgressionConfig.js';
+import { XP, PASS, tierXp, levelStep, levelReward, passReward } from '../config/ProgressionConfig.js';
 import { grantRewards, grantReward } from './Rewards.js';
 
 /** Season id, one per calendar month: "2026-10". */
@@ -42,9 +42,14 @@ export function levelInfo(totalXp) {
 /** Current pass tier (0..TIERS) and progress toward the next tier. */
 export function passInfo(saveManager, now = Date.now()) {
   const pass = ensureSeason(saveManager, now);
-  const tier = Math.min(PASS.TIERS, Math.floor(pass.xp / PASS.XP_PER_TIER));
-  const into = tier >= PASS.TIERS ? PASS.XP_PER_TIER : pass.xp - tier * PASS.XP_PER_TIER;
-  return { tier, into, need: PASS.XP_PER_TIER, gold: pass.gold, season: pass.season };
+  let tier = 0;
+  let rest = pass.xp;
+  while (tier < PASS.TIERS && rest >= tierXp(tier + 1)) {
+    rest -= tierXp(tier + 1);
+    tier += 1;
+  }
+  const need = tier >= PASS.TIERS ? tierXp(PASS.TIERS) : tierXp(tier + 1);
+  return { tier, into: tier >= PASS.TIERS ? need : rest, need, gold: pass.gold, season: pass.season };
 }
 
 /** XP for a run. */

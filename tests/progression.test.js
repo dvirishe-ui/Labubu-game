@@ -3,7 +3,7 @@ import { speedAt, stageIndexAt, ZoneDirector } from '../src/systems/RunDirector.
 import { addXp, levelInfo, passInfo, claimPassTier, unlockGoldPass, runXp, claimableCount, ensureSeason } from '../src/systems/Progression.js';
 import { buyBoost, useBoost, buyUpgrade, upgradeCost, durationMult, headStartDistance } from '../src/systems/Boosts.js';
 import { grantReward } from '../src/systems/Rewards.js';
-import { SPEED, STAGES, ZONE_RULES, PASS, UPGRADE_COSTS, levelStep, passReward } from '../src/config/ProgressionConfig.js';
+import { SPEED, STAGES, ZONE_RULES, PASS, UPGRADE_COSTS, levelStep, passReward, tierXp } from '../src/config/ProgressionConfig.js';
 import { makeSave } from './helpers.js';
 
 describe('run difficulty', () => {
@@ -45,12 +45,12 @@ describe('levels & pass', () => {
     const res = addXp(save, levelStep(1) + 5, clock.t);
     expect(res.levelUps).toHaveLength(1);
     expect(save.data.currencies.popCoins).toBeGreaterThan(coins);
-    expect(passInfo(save, clock.t).tier).toBe(Math.floor((levelStep(1) + 5) / PASS.XP_PER_TIER));
+    expect(passInfo(save, clock.t).tier).toBe(levelStep(1) + 5 >= tierXp(1) ? 1 : 0);
   });
 
   it('claims free tiers, gold needs the Gold Pass', () => {
     const { save, clock } = makeSave();
-    addXp(save, PASS.XP_PER_TIER * 2, clock.t);
+    addXp(save, tierXp(1) + tierXp(2), clock.t);
     expect(claimableCount(save, clock.t)).toBe(2);
     expect(claimPassTier(save, 1, 'free', clock.t).ok).toBe(true);
     expect(claimPassTier(save, 1, 'free', clock.t).ok).toBe(false);
@@ -68,6 +68,15 @@ describe('levels & pass', () => {
     ensureSeason(save, next);
     expect(passInfo(save, next).tier).toBe(0);
     expect(levelInfo(save.data.progress.xp).level).toBeGreaterThan(1); // level is lifetime
+  });
+
+  it('is 60 tiers and each tier costs more XP than the last', () => {
+    expect(PASS.TIERS).toBe(60);
+    for (let t = 2; t <= PASS.TIERS; t++) expect(tierXp(t)).toBeGreaterThan(tierXp(t - 1));
+    const { save, clock } = makeSave();
+    addXp(save, 1e9, clock.t);
+    expect(passInfo(save, clock.t).tier).toBe(60);
+    expect(passReward(60, 'gold')).toEqual({ type: 'item', id: 'champion_labubu' });
   });
 
   it('every tier has a reward on both tracks', () => {
