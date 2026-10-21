@@ -12,7 +12,7 @@ import { CATALOG } from '../config/GachaDropTable.js';
 import { Services } from '../systems/Services.js';
 import { accountReady } from '../systems/Account.js';
 import { levelInfo } from '../systems/Progression.js';
-import { importSaveCode } from '../systems/SaveCode.js';
+import { codeErrorText, loadAnyCode } from '../systems/SaveNames.js';
 import { bakePlayerTextures } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
 import { addForestBackdrop, makeButton, outlinedText, textStyle, floatText } from '../ui/UIKit.js';
@@ -146,18 +146,18 @@ export class LoginScene extends Phaser.Scene {
   }
 
   async loadCode() {
-    const code = await askText({ title: 'Paste your save code', value: '', maxLength: 200000, multiline: true, okLabel: 'Load' });
+    const code = await askText({ title: 'Type your save code (or paste a long one)', value: '', maxLength: 200000, multiline: true, okLabel: 'Load' });
     if (!code) return;
     try {
-      await importSaveCode(Services.save, code);
+      await loadAnyCode(Services.sync, Services.save, code);
       bakePlayerTextures(this, Services.save.data.equipped);
       this.hero.setTexture('player_preview');
       Services.audio.play('spinWin');
       floatText(this, WIDTH / 2, HEIGHT / 2, 'Progress loaded!', '#6ee7a8', 40);
       this.showGuest();
-    } catch {
+    } catch (err) {
       Services.audio.play('error');
-      Services.bus.emit('ui:toast', { text: "That code didn't work", sub: 'Copy the whole code and try again', color: COLORS.pink });
+      Services.bus.emit('ui:toast', { ...codeErrorText(err), color: COLORS.pink });
     }
   }
 

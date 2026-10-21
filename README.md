@@ -148,7 +148,8 @@ The game opens on a start screen that signs the player in and brings back their 
   - The leaderboard is a shared `scores` collection, and each player writes only their own row.
   - Viewers who may only view see "view only" and keep progress on the device.
 - **In the store app:** the Supabase or REST backends described above.
-- **Guests:** progress stays on the device. The Settings menu has **Copy save code** and **Load save code**, which move the whole save to any device as one copy-paste code.
+- **Guests:** progress stays on the device. The Settings menu has **My save code** and **Load save code**, which move the whole save to any device as one copy-paste code.
+- **Short save codes:** signed-in players who can save can pick their own code (3-16 letters or numbers, e.g. `dvir123`) under **My save code**. The latest save is kept under that name in the artifact's shared `codes` collection (refreshed after every cloud save), so typing the name in **Load save code** on any device, even a view-only one, loads the progress. Names are first come, first served.
 - A brand-new, untouched device never overwrites real progress when it first syncs.
 
 ### Wardrobe

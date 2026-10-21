@@ -17,7 +17,8 @@ import { XP } from '../config/ProgressionConfig.js';
 import { showRewardedAd } from '../systems/AdService.js';
 import { bakePlayerTextures, ICON_RES } from '../art/CharacterRenderer.js';
 import { askText } from '../ui/TextPrompt.js';
-import { exportSaveCode, importSaveCode } from '../systems/SaveCode.js';
+import { exportSaveCode } from '../systems/SaveCode.js';
+import { claimSaveName, codesAdapter, codeErrorText, loadAnyCode } from '../systems/SaveNames.js';
 import { canFullscreen, toggleFullscreen } from '../ui/Fullscreen.js';
 import { canSpin, spinWheel } from '../systems/DailyRewards.js';
 import {
@@ -651,7 +652,7 @@ export class MainMenuScene extends Phaser.Scene {
     ];
     modal.add([sfxBtn, musicBtn, this.add.text(60, 150, info.join('\n'), textStyle(19, '#5a4a6a', { lineSpacing: 8 }))]);
     modal.add([
-      makeButton(this, 170, 480, 'Copy save code', () => this.copySaveCode(), { w: 250, h: 52, fontSize: 20, skin: 'purple' }),
+      makeButton(this, 170, 480, 'My save code', () => this.showSaveCode(modal), { w: 250, h: 52, fontSize: 20, skin: 'purple' }),
       makeButton(this, 450, 480, 'Load save code', () => this.loadSaveCode(modal), { w: 250, h: 52, fontSize: 20, skin: 'purple' })
     ]);
     modal.add(
@@ -700,18 +701,55 @@ export class MainMenuScene extends Phaser.Scene {
     else await askText({ title: 'Copy this save code (select all, then copy)', value: code, maxLength: 200000, multiline: true, okLabel: 'Done' });
   }
 
+  /** Save code menu: choose a short code name, or copy the long code. */
+  showSaveCode(settings) {
+    const name = Services.save.data.profile.saveName;
+    const adapter = codesAdapter(Services.sync);
+    const canName = adapter && !adapter.readOnly;
+    const modal = new Modal(this, { width: 560, height: 430, title: 'Save code', depth: 1100 });
+    modal.add(this.add.text(280, 70, name ? 'Your save code is' : 'Pick a short code to load your\nprogress on any device', textStyle(21, '#5a4a6a', { align: 'center' })).setOrigin(0.5));
+    if (name) modal.add(outlinedText(this, 280, 122, name, 44, '#ffe066'));
+    modal.add(
+      this.add
+        .text(280, 178, canName ? 'Type it in Settings → Load save code' : 'Short codes need Claude sign-in with save access.\nUse the long code instead.', textStyle(16, '#7a6a8a', { align: 'center' }))
+        .setOrigin(0.5)
+    );
+    if (canName) {
+      modal.add(
+        makeButton(this, 280, 252, name ? 'Change my code' : 'Choose my code', () => this.chooseSaveName(modal, settings), { w: 300, h: 60, fontSize: 24, skin: 'yellow' })
+      );
+    }
+    modal.add(makeButton(this, 280, canName ? 344 : 280, 'Copy long code', () => this.copySaveCode(), { w: 300, h: 54, fontSize: 21, skin: 'purple' }));
+  }
+
+  async chooseSaveName(modal, settings) {
+    const current = Services.save.data.profile.saveName || Services.save.data.profile.displayName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const raw = await askText({ title: 'Choose your save code (letters and numbers)', value: current, maxLength: 16, okLabel: 'Save' });
+    if (!raw) return;
+    try {
+      const name = await claimSaveName(codesAdapter(Services.sync), Services.save, raw);
+      Services.audio.play('spinWin');
+      Services.bus.emit('ui:toast', { text: `Your save code: ${name}`, sub: 'Type it on any device to load your progress', color: COLORS.mint });
+      modal?.close();
+      this.time.delayedCall(320, () => this.showSaveCode(settings));
+    } catch (err) {
+      Services.audio.play('error');
+      Services.bus.emit('ui:toast', { ...codeErrorText(err), color: COLORS.pink });
+    }
+  }
+
   async loadSaveCode(modal) {
-    const code = await askText({ title: 'Paste your save code', value: '', maxLength: 200000, multiline: true, okLabel: 'Load' });
+    const code = await askText({ title: 'Type your save code (or paste a long one)', value: '', maxLength: 200000, multiline: true, okLabel: 'Load' });
     if (!code) return;
     try {
-      await importSaveCode(Services.save, code);
+      await loadAnyCode(Services.sync, Services.save, code);
       bakePlayerTextures(this, Services.save.data.equipped);
       Services.bus.emit('ui:toast', { text: 'Progress loaded!', color: COLORS.mint });
       modal?.close();
       this.scene.restart();
-    } catch {
+    } catch (err) {
       Services.audio.play('error');
-      Services.bus.emit('ui:toast', { text: "That code didn't work", sub: 'Copy the whole code and try again', color: COLORS.pink });
+      Services.bus.emit('ui:toast', { ...codeErrorText(err), color: COLORS.pink });
     }
   }
 

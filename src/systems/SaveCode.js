@@ -53,7 +53,10 @@ export async function decodeSaveCode(code) {
 export async function importSaveCode(saveManager, code, now = Date.now()) {
   const incoming = migrateSave(await decodeSaveCode(code), now);
   incoming.meta.updatedAt = now + 1;
+  const ownName = saveManager.data.profile.saveName || '';
   const { merged } = resolveConflict(saveManager.data, incoming);
+  // A code name belongs to whoever chose it, not to everyone who loads it.
+  merged.profile.saveName = ownName;
   merged.meta.isDirty = true;
   saveManager.replaceWith(merged);
   saveManager.save('save_code');

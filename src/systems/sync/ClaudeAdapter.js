@@ -10,10 +10,15 @@
  * Publish the page with:
  *   capabilities: {
  *     db: { rules: [ { path: 'scores', read: 'view', write: 'owner' },
- *                    { path: 'scores/{self}', write: 'interact' } ] },
+ *                    { path: 'scores/{self}', write: 'interact' },
+ *                    { path: 'codes', read: 'view', write: 'interact' } ] },
  *     user: { scopes: ['profile'] }
  *   }
+ *
+ * `codes` holds the short save codes players choose (see SaveNames.js).
  */
+import { refreshSaveName } from '../SaveNames.js';
+
 const CONNECT_TIMEOUT_MS = 8000;
 
 export class ClaudeAdapter {
@@ -67,6 +72,7 @@ export class ClaudeAdapter {
     if (this.readOnly) return;
     try {
       await this._saveRef().set({ json: JSON.stringify(save), updatedAt: save.meta.updatedAt, v: 1 });
+      refreshSaveName(this, save).catch(() => {});
     } catch (err) {
       // invalid_argument here = this viewer may read but not write (view-only link).
       if (err?.code === 'invalid_argument') this.readOnly = true;

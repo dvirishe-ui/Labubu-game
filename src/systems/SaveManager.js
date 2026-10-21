@@ -35,7 +35,8 @@ export function createDefaultSave(now = Date.now()) {
       displayName: `Labubu#${playerId.slice(0, 4).toUpperCase()}`,
       createdAt: now,
       lastOnlineTimestamp: now,
-      lastIdleClaimTimestamp: now
+      lastIdleClaimTimestamp: now,
+      saveName: ''
     },
     currencies: {
       popCoins: ECONOMY.STARTING_COINS,
