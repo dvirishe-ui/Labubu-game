@@ -1,0 +1,9 @@
+{
+  "segment": { "id": "S28", "src": "Pasted text (3)(1).txt", "ls": 221, "le": 296, "game": "fmk", "raw_title": "פאק מארי קיל", "t0": "28:55", "t1": "38:47" },
+  "rounds": [
+    { "n": 1, "ls": 227, "le": 237, "t0": "29:42", "t1": "31:12", "kind": "fmk", "prompt": "שוכב / מתחתן / הורג", "options": ["אפי הנמר", "לירן חולצה אפורה", "בינו (דוקטור שקשוקה)"], "raw": "אפי הנמר לירן חולצה אפורה ובינו", "answer": null, "panel": ["מתחתנים עם בינו", "אחד הפאנליסטים הורג את אפי הנמר (סיבה כדורגלנית)", "אחר: הורג את לירן ושוכב עם אפי"], "conf": "medium", "status": "verified_in_transcript", "rating": "mature", "notes": "" },
+    { "n": 2, "ls": 272, "le": 283, "t0": "35:38", "t1": "37:09", "kind": "fmk", "prompt": "שוכב / מתחתן / הורג", "options": ["רותם אבוהב", "דביר בנדק", "יורם גאון"], "raw": "רותם מבוב יר בנדק ויורם גאון", "answer": null, "panel": ["מתחתנים עם רותם אבוהב", "שוכבים עם יורם גאון (בקטע מכבד)", "הורגים את דביר — סליחה דביר"], "conf": "high", "status": "verified_in_transcript", "rating": "mature", "notes": "" },
+    { "n": 3, "ls": 238, "le": 255, "t0": "31:12", "t1": "33:25", "kind": "fmk", "prompt": "שוכב / מתחתן / הורג", "options": ["אמיר חצרוני", "[שם משובש]", "הילד שזרק כיסא על אמיר חצרוני"], "raw": "אמיר חצרוני ks והילד שזרק כיסא על אמיר חצרוני", "answer": null, "panel": [], "conf": "low", "status": "ambiguous_autocaption", "rating": "mature", "notes": "אחת משלוש האפשרויות משובשת (\"ks\"/\"כס\")." },
+    { "n": 4, "ls": 256, "le": 272, "t0": "33:25", "t1": "35:38", "kind": "fmk", "prompt": "שוכב / מתחתן / הורג", "options": [], "raw": "רומן זדורוב אק וח", "answer": null, "panel": [], "conf": "low", "status": "ambiguous_autocaption", "rating": "mature", "disabled": true, "disabled_reason": "נוגע בתיק פלילי אמיתי עם קורבן קטינה — לא מוצג.", "notes": "" }
+  ]
+}

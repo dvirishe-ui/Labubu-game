@@ -1,0 +1,657 @@
+[
+  {
+    "id": "israel-bidur",
+    "hebrew_title": "ישראל בידור",
+    "subtitle": "כותרת אמיתית או שיצחקי המציא?",
+    "aliases": [
+      "כותרות ישראל בידור"
+    ],
+    "kind": "realfake",
+    "emoji": "📰",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 33,
+    "unresolved_count": 28,
+    "mature_count": 1,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X11",
+      "X17",
+      "X7",
+      "S03",
+      "S06",
+      "S14",
+      "S21"
+    ]
+  },
+  {
+    "id": "mizrahi-song",
+    "hebrew_title": "שירים במזרחית",
+    "subtitle": "שיר אמיתי או שיצחקי כתב?",
+    "aliases": [
+      "שיר של מושיקו מור"
+    ],
+    "kind": "realfake",
+    "emoji": "🎤",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 32,
+    "unresolved_count": 12,
+    "mature_count": 11,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X17",
+      "X2_2",
+      "X3_2",
+      "S04",
+      "S15",
+      "S23"
+    ]
+  },
+  {
+    "id": "noam-status",
+    "hebrew_title": "נועם או אסיר משוחרר",
+    "subtitle": "סטטוס ישן של נועם — או של אסיר משוחרר?",
+    "aliases": [
+      "סטטוס של נועם"
+    ],
+    "kind": "realfake",
+    "emoji": "🔐",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "noam": "נועם",
+      "prisoner": "אסיר משוחרר"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 19,
+    "unresolved_count": 2,
+    "mature_count": 4,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X10",
+      "S01",
+      "S05"
+    ]
+  },
+  {
+    "id": "red-line",
+    "hebrew_title": "רד ליינס",
+    "subtitle": "משפט אמיתי מהעמוד או שיצחקי כתב?",
+    "aliases": [
+      "משפטי פתיחה",
+      "העמוד הסקסי"
+    ],
+    "kind": "realfake",
+    "emoji": "💋",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 34,
+    "unresolved_count": 10,
+    "mature_count": 34,
+    "content_rating": "mature",
+    "source_segments": [
+      "X17",
+      "S08",
+      "S11",
+      "S24",
+      "S26"
+    ]
+  },
+  {
+    "id": "sheets-lines",
+    "hebrew_title": "משפטים מהמיטה",
+    "subtitle": "משפט אמיתי מהעמוד או שיצחקי כתב?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🛏️",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 10,
+    "unresolved_count": 2,
+    "mature_count": 10,
+    "content_rating": "mature",
+    "source_segments": [
+      "X11"
+    ]
+  },
+  {
+    "id": "mauhevet",
+    "hebrew_title": "מאוהבת",
+    "subtitle": "משפט מעמוד אמיתי או שיצחקי כתב?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "💘",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 4,
+    "unresolved_count": 6,
+    "mature_count": 4,
+    "content_rating": "mature",
+    "source_segments": [
+      "X8"
+    ]
+  },
+  {
+    "id": "masc-page",
+    "hebrew_title": "גבר אמיתי",
+    "subtitle": "עצה מעמוד אמיתי או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "💪",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 4,
+    "unresolved_count": 1,
+    "mature_count": 4,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X12",
+      "X17"
+    ]
+  },
+  {
+    "id": "student-film",
+    "hebrew_title": "סרט סטודנטים",
+    "subtitle": "סינופסיס אמיתי או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🎬",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 10,
+    "unresolved_count": 0,
+    "mature_count": 0,
+    "content_rating": "general",
+    "source_segments": [
+      "S09"
+    ]
+  },
+  {
+    "id": "tiktok-ads",
+    "hebrew_title": "פרסומות טיקטוק",
+    "subtitle": "פרסומת שבאמת רצה — או המצאה?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "📱",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 3,
+    "unresolved_count": 2,
+    "mature_count": 0,
+    "content_rating": "general",
+    "source_segments": [
+      "S19"
+    ]
+  },
+  {
+    "id": "fb-confessions",
+    "hebrew_title": "וידויים בפייסבוק",
+    "subtitle": "וידוי אמיתי או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🤫",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 4,
+    "unresolved_count": 1,
+    "mature_count": 2,
+    "content_rating": "mixed",
+    "source_segments": [
+      "S20"
+    ]
+  },
+  {
+    "id": "pickup-tips",
+    "hebrew_title": "אמני פיתוי",
+    "subtitle": "טיפ אמיתי או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🕶️",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 4,
+    "unresolved_count": 1,
+    "mature_count": 0,
+    "content_rating": "general",
+    "source_segments": [
+      "S29"
+    ]
+  },
+  {
+    "id": "new-age-workshop",
+    "hebrew_title": "סדנאות ניו-אייג'",
+    "subtitle": "סדנה אמיתית או שיצחקי המציא?",
+    "aliases": [
+      "רוחניות"
+    ],
+    "kind": "realfake",
+    "emoji": "🧘",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 15,
+    "unresolved_count": 3,
+    "mature_count": 7,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X11",
+      "X15",
+      "X7"
+    ]
+  },
+  {
+    "id": "mizrahi-poster",
+    "hebrew_title": "פוסטרים במזרחית",
+    "subtitle": "פוסטר הופעה אמיתי או המצאה?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🪩",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 14,
+    "unresolved_count": 6,
+    "mature_count": 3,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X17",
+      "X4_1",
+      "X6_1"
+    ]
+  },
+  {
+    "id": "fake-podcast",
+    "hebrew_title": "הפודקאסט הזה קיים?",
+    "subtitle": "פודקאסט אמיתי או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🎙️",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 3,
+    "unresolved_count": 1,
+    "mature_count": 0,
+    "content_rating": "general",
+    "source_segments": [
+      "X6_1"
+    ]
+  },
+  {
+    "id": "local-facts",
+    "hebrew_title": "עובדות מקומיות",
+    "subtitle": "עובדה אמיתית או המצאה?",
+    "aliases": [
+      "עובדות על בת ים"
+    ],
+    "kind": "realfake",
+    "emoji": "🏙️",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 2,
+    "unresolved_count": 1,
+    "mature_count": 0,
+    "content_rating": "general",
+    "source_segments": [
+      "X6_1"
+    ]
+  },
+  {
+    "id": "zimmer",
+    "hebrew_title": "צימר לשעה",
+    "subtitle": "צימר אמיתי או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "🛁",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 3,
+    "unresolved_count": 0,
+    "mature_count": 3,
+    "content_rating": "mature",
+    "source_segments": [
+      "X20"
+    ]
+  },
+  {
+    "id": "messages",
+    "hebrew_title": "הודעות אמיתיות?",
+    "subtitle": "הודעה שמישהי באמת קיבלה — או שיצחקי המציא?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "💬",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "real": "אמיתי",
+      "fake": "יצחקי המציא"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 10,
+    "unresolved_count": 6,
+    "mature_count": 10,
+    "content_rating": "mature",
+    "source_segments": [
+      "X16",
+      "X20"
+    ]
+  },
+  {
+    "id": "ex-or-dictator",
+    "hebrew_title": "הגרושה או דיקטטור",
+    "subtitle": "הודעה מהגרושה — או טקסט של דיקטטור?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "📨",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "ex": "הגרושה",
+      "dictator": "דיקטטור"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 1,
+    "unresolved_count": 1,
+    "mature_count": 1,
+    "content_rating": "mature",
+    "source_segments": [
+      "X9"
+    ]
+  },
+  {
+    "id": "wedding-photos",
+    "hebrew_title": "תמונות מהחתונה",
+    "subtitle": "תמונה אמיתית או AI?",
+    "aliases": [],
+    "kind": "realfake",
+    "emoji": "💍",
+    "canonical_in_show": true,
+    "status": "unplayable",
+    "options": {
+      "real": "אמיתית",
+      "fake": "AI"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 0,
+    "unresolved_count": 4,
+    "mature_count": 0,
+    "content_rating": "general",
+    "source_segments": [
+      "X19"
+    ]
+  },
+  {
+    "id": "perfect-but",
+    "hebrew_title": "היא מושלמת והכל, אבל…",
+    "subtitle": "זורמים או לא זורמים?",
+    "aliases": [
+      "היא סבבה והכל",
+      "הוא סבבה והכל"
+    ],
+    "kind": "dilemma",
+    "emoji": "😇",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "yes": "זורם/ת",
+      "no": "לא זורם/ת"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 31,
+    "unresolved_count": 3,
+    "mature_count": 12,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X16",
+      "X18",
+      "S07",
+      "S10",
+      "S13",
+      "S16",
+      "S25"
+    ]
+  },
+  {
+    "id": "chaltura",
+    "hebrew_title": "היית לוקח את החלטורה?",
+    "subtitle": "הסכום מצדיק את מה שתעבור?",
+    "aliases": [],
+    "kind": "dilemma",
+    "emoji": "💸",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "yes": "לוקח/ת",
+      "no": "לא לוקח/ת"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 9,
+    "unresolved_count": 1,
+    "mature_count": 5,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X18",
+      "X181110",
+      "X2_2",
+      "S27"
+    ]
+  },
+  {
+    "id": "hard-dilemmas",
+    "hebrew_title": "דילמות קשות",
+    "subtitle": "הכסף שווה את זה?",
+    "aliases": [],
+    "kind": "dilemma",
+    "emoji": "⚖️",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "yes": "לוקח/ת",
+      "no": "לא לוקח/ת"
+    },
+    "rules": null,
+    "players_min": 2,
+    "question_count": 3,
+    "unresolved_count": 1,
+    "mature_count": 1,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X8",
+      "S13"
+    ]
+  },
+  {
+    "id": "fmk",
+    "hebrew_title": "פאק מארי קיל",
+    "subtitle": "שלושה שמות, שלוש החלטות",
+    "aliases": [
+      "FMK"
+    ],
+    "kind": "fmk",
+    "emoji": "🃏",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {},
+    "rules": null,
+    "players_min": 2,
+    "question_count": 2,
+    "unresolved_count": 2,
+    "mature_count": 2,
+    "content_rating": "mature",
+    "source_segments": [
+      "S28"
+    ]
+  },
+  {
+    "id": "worst-advice",
+    "hebrew_title": "העצה הכי גרועה",
+    "subtitle": "בעיה אמיתית מהבית — תנו את העצה הכי נוראית",
+    "aliases": [
+      "שאלות מהבית",
+      "ייעוץ הפאנל"
+    ],
+    "kind": "creative",
+    "emoji": "🆘",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {},
+    "rules": null,
+    "players_min": 2,
+    "question_count": 18,
+    "unresolved_count": 1,
+    "mature_count": 7,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X10",
+      "X13",
+      "X14",
+      "X15",
+      "X18",
+      "S02",
+      "S12",
+      "S16",
+      "S22",
+      "S26"
+    ]
+  },
+  {
+    "id": "crisis-ads",
+    "hebrew_title": "פרסומות בזמן משבר",
+    "subtitle": "מותג + משבר = סלוגן",
+    "aliases": [],
+    "kind": "creative",
+    "emoji": "📣",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {},
+    "rules": null,
+    "players_min": 2,
+    "question_count": 6,
+    "unresolved_count": 1,
+    "mature_count": 4,
+    "content_rating": "mixed",
+    "source_segments": [
+      "S18"
+    ]
+  },
+  {
+    "id": "polygraph",
+    "hebrew_title": "מכונת האמת",
+    "subtitle": "הכיסא החם — בידור בלבד, לא גלאי שקר אמיתי",
+    "aliases": [
+      "פוליגרף"
+    ],
+    "kind": "hotseat",
+    "emoji": "🫀",
+    "canonical_in_show": true,
+    "status": "playable",
+    "options": {
+      "yes": "כן",
+      "no": "לא"
+    },
+    "rules": null,
+    "players_min": 3,
+    "question_count": 17,
+    "unresolved_count": 0,
+    "mature_count": 8,
+    "content_rating": "mixed",
+    "source_segments": [
+      "X181110",
+      "S30"
+    ]
+  }
+]

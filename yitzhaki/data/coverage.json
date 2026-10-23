@@ -1,0 +1,551 @@
+{
+  "generated_from": "data/extraction (manual line-by-line extraction of the supplied source packet)",
+  "source_documents_processed": 30,
+  "extraction_files": 50,
+  "segments": 50,
+  "rounds_total": 387,
+  "rounds_usable": 291,
+  "rounds_unresolved": 96,
+  "unresolved_by_reason": {
+    "low_confidence": 78,
+    "no_intelligible_prompt": 6,
+    "needs_media": 4,
+    "disabled": 7,
+    "duplicate_of S11-6": 1
+  },
+  "by_source": [
+    {
+      "source_document": "Pasted text (10).txt",
+      "rounds": 4,
+      "usable": 4,
+      "unresolved": 0,
+      "disabled": 0,
+      "games": [
+        "noam-status",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (11).txt",
+      "rounds": 25,
+      "usable": 18,
+      "unresolved": 7,
+      "disabled": 0,
+      "games": [
+        "new-age-workshop",
+        "sheets-lines",
+        "israel-bidur"
+      ]
+    },
+    {
+      "source_document": "Pasted text (12).txt",
+      "rounds": 4,
+      "usable": 3,
+      "unresolved": 1,
+      "disabled": 0,
+      "games": [
+        "masc-page"
+      ]
+    },
+    {
+      "source_document": "Pasted text (13).txt",
+      "rounds": 3,
+      "usable": 3,
+      "unresolved": 0,
+      "disabled": 0,
+      "games": [
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (14).txt",
+      "rounds": 3,
+      "usable": 2,
+      "unresolved": 1,
+      "disabled": 0,
+      "games": [
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (15).txt",
+      "rounds": 7,
+      "usable": 7,
+      "unresolved": 0,
+      "disabled": 0,
+      "games": [
+        "new-age-workshop",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (16).txt",
+      "rounds": 10,
+      "usable": 5,
+      "unresolved": 5,
+      "disabled": 0,
+      "games": [
+        "perfect-but",
+        "messages"
+      ]
+    },
+    {
+      "source_document": "Pasted text (17).txt",
+      "rounds": 26,
+      "usable": 20,
+      "unresolved": 6,
+      "disabled": 0,
+      "games": [
+        "mizrahi-poster",
+        "red-line",
+        "masc-page",
+        "mizrahi-song",
+        "israel-bidur"
+      ]
+    },
+    {
+      "source_document": "Pasted text (18).txt",
+      "rounds": 10,
+      "usable": 10,
+      "unresolved": 0,
+      "disabled": 0,
+      "games": [
+        "perfect-but",
+        "chaltura",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text(20261023-181110).txt",
+      "rounds": 4,
+      "usable": 4,
+      "unresolved": 0,
+      "disabled": 0,
+      "games": [
+        "chaltura",
+        "polygraph"
+      ]
+    },
+    {
+      "source_document": "Pasted text (19).txt",
+      "rounds": 4,
+      "usable": 0,
+      "unresolved": 4,
+      "disabled": 0,
+      "games": [
+        "wedding-photos"
+      ]
+    },
+    {
+      "source_document": "Pasted text (20).txt",
+      "rounds": 12,
+      "usable": 10,
+      "unresolved": 2,
+      "disabled": 0,
+      "games": [
+        "zimmer",
+        "messages"
+      ]
+    },
+    {
+      "source_document": "Pasted text (2)(2).txt",
+      "rounds": 8,
+      "usable": 5,
+      "unresolved": 3,
+      "disabled": 0,
+      "games": [
+        "mizrahi-song",
+        "chaltura"
+      ]
+    },
+    {
+      "source_document": "Pasted text (3)(2).txt",
+      "rounds": 6,
+      "usable": 5,
+      "unresolved": 1,
+      "disabled": 0,
+      "games": [
+        "mizrahi-song"
+      ]
+    },
+    {
+      "source_document": "Pasted text (4)(1).txt",
+      "rounds": 9,
+      "usable": 4,
+      "unresolved": 5,
+      "disabled": 2,
+      "games": [
+        "mizrahi-poster"
+      ]
+    },
+    {
+      "source_document": "Pasted text (6)(1).txt",
+      "rounds": 11,
+      "usable": 9,
+      "unresolved": 2,
+      "disabled": 0,
+      "games": [
+        "fake-podcast",
+        "local-facts",
+        "mizrahi-poster"
+      ]
+    },
+    {
+      "source_document": "Pasted text (7).txt",
+      "rounds": 15,
+      "usable": 8,
+      "unresolved": 7,
+      "disabled": 1,
+      "games": [
+        "new-age-workshop",
+        "israel-bidur"
+      ]
+    },
+    {
+      "source_document": "Pasted text (8).txt",
+      "rounds": 12,
+      "usable": 6,
+      "unresolved": 6,
+      "disabled": 1,
+      "games": [
+        "mauhevet",
+        "hard-dilemmas"
+      ]
+    },
+    {
+      "source_document": "Pasted text (9).txt",
+      "rounds": 2,
+      "usable": 1,
+      "unresolved": 1,
+      "disabled": 1,
+      "games": [
+        "ex-or-dictator"
+      ]
+    },
+    {
+      "source_document": "Pasted text(20261023-175337).txt",
+      "rounds": 22,
+      "usable": 18,
+      "unresolved": 4,
+      "disabled": 0,
+      "games": [
+        "noam-status",
+        "worst-advice",
+        "israel-bidur"
+      ]
+    },
+    {
+      "source_document": "Pasted text (2).txt",
+      "rounds": 22,
+      "usable": 16,
+      "unresolved": 6,
+      "disabled": 0,
+      "games": [
+        "mizrahi-song",
+        "noam-status",
+        "israel-bidur"
+      ]
+    },
+    {
+      "source_document": "Pasted text (3).txt",
+      "rounds": 27,
+      "usable": 26,
+      "unresolved": 1,
+      "disabled": 0,
+      "games": [
+        "perfect-but",
+        "red-line",
+        "student-film"
+      ]
+    },
+    {
+      "source_document": "Pasted text (4).txt",
+      "rounds": 22,
+      "usable": 18,
+      "unresolved": 4,
+      "disabled": 0,
+      "games": [
+        "perfect-but",
+        "red-line",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (5).txt",
+      "rounds": 14,
+      "usable": 9,
+      "unresolved": 5,
+      "disabled": 0,
+      "games": [
+        "perfect-but",
+        "hard-dilemmas",
+        "israel-bidur"
+      ]
+    },
+    {
+      "source_document": "Pasted text (6).txt",
+      "rounds": 20,
+      "usable": 15,
+      "unresolved": 5,
+      "disabled": 0,
+      "games": [
+        "mizrahi-song",
+        "perfect-but",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text(20261023-175051).txt",
+      "rounds": 12,
+      "usable": 9,
+      "unresolved": 3,
+      "disabled": 0,
+      "games": [
+        "crisis-ads",
+        "tiktok-ads"
+      ]
+    },
+    {
+      "source_document": "Pasted text(20261023-180804).txt",
+      "rounds": 18,
+      "usable": 10,
+      "unresolved": 8,
+      "disabled": 0,
+      "games": [
+        "fb-confessions",
+        "israel-bidur",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (2)(1).txt",
+      "rounds": 27,
+      "usable": 22,
+      "unresolved": 5,
+      "disabled": 1,
+      "games": [
+        "mizrahi-song",
+        "red-line",
+        "perfect-but",
+        "worst-advice"
+      ]
+    },
+    {
+      "source_document": "Pasted text (3)(1).txt",
+      "rounds": 28,
+      "usable": 24,
+      "unresolved": 4,
+      "disabled": 1,
+      "games": [
+        "chaltura",
+        "fmk",
+        "pickup-tips",
+        "polygraph"
+      ]
+    },
+    {
+      "source_document": "Pasted text (5)(1).txt",
+      "rounds": 0,
+      "usable": 0,
+      "unresolved": 0,
+      "disabled": 0,
+      "games": []
+    }
+  ],
+  "by_game": [
+    {
+      "id": "israel-bidur",
+      "title": "ישראל בידור",
+      "playable": 33,
+      "unresolved": 28
+    },
+    {
+      "id": "mizrahi-song",
+      "title": "שירים במזרחית",
+      "playable": 32,
+      "unresolved": 12
+    },
+    {
+      "id": "noam-status",
+      "title": "נועם או אסיר משוחרר",
+      "playable": 19,
+      "unresolved": 2
+    },
+    {
+      "id": "red-line",
+      "title": "רד ליינס",
+      "playable": 34,
+      "unresolved": 10
+    },
+    {
+      "id": "sheets-lines",
+      "title": "משפטים מהמיטה",
+      "playable": 10,
+      "unresolved": 2
+    },
+    {
+      "id": "mauhevet",
+      "title": "מאוהבת",
+      "playable": 4,
+      "unresolved": 6
+    },
+    {
+      "id": "masc-page",
+      "title": "גבר אמיתי",
+      "playable": 4,
+      "unresolved": 1
+    },
+    {
+      "id": "student-film",
+      "title": "סרט סטודנטים",
+      "playable": 10,
+      "unresolved": 0
+    },
+    {
+      "id": "tiktok-ads",
+      "title": "פרסומות טיקטוק",
+      "playable": 3,
+      "unresolved": 2
+    },
+    {
+      "id": "fb-confessions",
+      "title": "וידויים בפייסבוק",
+      "playable": 4,
+      "unresolved": 1
+    },
+    {
+      "id": "pickup-tips",
+      "title": "אמני פיתוי",
+      "playable": 4,
+      "unresolved": 1
+    },
+    {
+      "id": "new-age-workshop",
+      "title": "סדנאות ניו-אייג'",
+      "playable": 15,
+      "unresolved": 3
+    },
+    {
+      "id": "mizrahi-poster",
+      "title": "פוסטרים במזרחית",
+      "playable": 14,
+      "unresolved": 6
+    },
+    {
+      "id": "fake-podcast",
+      "title": "הפודקאסט הזה קיים?",
+      "playable": 3,
+      "unresolved": 1
+    },
+    {
+      "id": "local-facts",
+      "title": "עובדות מקומיות",
+      "playable": 2,
+      "unresolved": 1
+    },
+    {
+      "id": "zimmer",
+      "title": "צימר לשעה",
+      "playable": 3,
+      "unresolved": 0
+    },
+    {
+      "id": "messages",
+      "title": "הודעות אמיתיות?",
+      "playable": 10,
+      "unresolved": 6
+    },
+    {
+      "id": "ex-or-dictator",
+      "title": "הגרושה או דיקטטור",
+      "playable": 1,
+      "unresolved": 1
+    },
+    {
+      "id": "wedding-photos",
+      "title": "תמונות מהחתונה",
+      "playable": 0,
+      "unresolved": 4
+    },
+    {
+      "id": "perfect-but",
+      "title": "היא מושלמת והכל, אבל…",
+      "playable": 31,
+      "unresolved": 3
+    },
+    {
+      "id": "chaltura",
+      "title": "היית לוקח את החלטורה?",
+      "playable": 9,
+      "unresolved": 1
+    },
+    {
+      "id": "hard-dilemmas",
+      "title": "דילמות קשות",
+      "playable": 3,
+      "unresolved": 1
+    },
+    {
+      "id": "fmk",
+      "title": "פאק מארי קיל",
+      "playable": 2,
+      "unresolved": 2
+    },
+    {
+      "id": "worst-advice",
+      "title": "העצה הכי גרועה",
+      "playable": 18,
+      "unresolved": 1
+    },
+    {
+      "id": "crisis-ads",
+      "title": "פרסומות בזמן משבר",
+      "playable": 6,
+      "unresolved": 1
+    },
+    {
+      "id": "polygraph",
+      "title": "מכונת האמת",
+      "playable": 17,
+      "unresolved": 0
+    }
+  ],
+  "non_game_segments": [
+    {
+      "id": "kids-book-reading",
+      "title": "ספר שאלות לילדים — קריאה ודיון",
+      "classification": "NOT_A_GAME",
+      "reason": "קטע קריאה ושיחה בלי סבבי ניחוש."
+    },
+    {
+      "id": "gifts",
+      "title": "מתנות מהקהל — אמיתי או לא",
+      "classification": "POSSIBLE_GAME",
+      "reason": "הפינה מוצגת אך הפריטים מוצגים במצלמה; אין בתמליל מספיק תוכן לשחק."
+    },
+    {
+      "id": "cringe-transfer",
+      "title": "קרינג' מעבר",
+      "classification": "CONFIRMED_INTERACTIVE_SEGMENT",
+      "reason": "קריאה ותגובות בלי סבבים עם תשובה."
+    },
+    {
+      "id": "testimonies",
+      "title": "עדויות סטנדאפיסטים",
+      "classification": "CONFIRMED_INTERACTIVE_SEGMENT",
+      "reason": "מבוסס הקלטות קוליות ותוכן על אנשים אמיתיים."
+    },
+    {
+      "id": "fake-sponsors",
+      "title": "חסויות מזויפות",
+      "classification": "CONFIRMED_INTERACTIVE_SEGMENT",
+      "reason": "מערכון בלי סבבי ניחוש."
+    },
+    {
+      "id": "interviews",
+      "title": "ראיונות ושיחות",
+      "classification": "NOT_A_GAME",
+      "reason": "שיחה חופשית."
+    }
+  ]
+}
