@@ -26,7 +26,7 @@ export function Skyline() {
 }
 
 export function Screen({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <main className={`mx-auto flex min-h-[100dvh] w-full max-w-xl flex-col px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))] ${className}`}>{children}</main>;
+  return <main className={`mx-auto flex min-h-fill w-full max-w-xl flex-col px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))] ${className}`}>{children}</main>;
 }
 
 export function TopBar({ onBack, title, right }: { onBack?: () => void; title?: string; right?: ReactNode }) {
@@ -66,7 +66,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center" role="dialog" aria-modal aria-label={title} onClick={onClose}>
-      <div className="card max-h-[90dvh] w-full max-w-lg animate-rise overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="card max-h-modal w-full max-w-lg animate-rise overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="font-display text-2xl text-amber-400">{title}</h2>
           <button className="btn-ghost min-h-[44px] px-3" onClick={onClose} aria-label="סגירה">

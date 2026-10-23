@@ -594,6 +594,17 @@
     "candidate_answer": "real"
   },
   {
+    "id": "S03-8",
+    "game_id": "israel-bidur",
+    "source_document": "Pasted text(20261023-175337).txt",
+    "source_line_start": 355,
+    "source_line_end": 358,
+    "reason": "low_confidence",
+    "confidence": "low",
+    "source_status": "ambiguous_autocaption",
+    "candidate_answer": null
+  },
+  {
     "id": "S03-10",
     "game_id": "israel-bidur",
     "source_document": "Pasted text(20261023-175337).txt",
@@ -624,6 +635,17 @@
     "reason": "low_confidence",
     "confidence": "low",
     "source_status": "no_reveal_found",
+    "candidate_answer": null
+  },
+  {
+    "id": "S04-7",
+    "game_id": "mizrahi-song",
+    "source_document": "Pasted text (2).txt",
+    "source_line_start": 99,
+    "source_line_end": 102,
+    "reason": "low_confidence",
+    "confidence": "low",
+    "source_status": "ambiguous_autocaption",
     "candidate_answer": null
   },
   {

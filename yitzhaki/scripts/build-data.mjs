@@ -10,6 +10,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exDir = path.join(root, 'data/extraction');
 const defs = Object.fromEntries(GAME_DEFS.map((g) => [g.id, g]));
 
+// Auto-captions misspell the panelists' names; fix them in quotes shown after a reveal.
+const NAME_FIXES = [
+  [/נוע[םן]? ?[מה]?ונג[רהא]ר?/g, 'נועם אונגר'],
+  [/דור (?:א?יטח|איתח)/g, 'דור יתח'],
+  [/צח רוקח|צח רוקך/g, 'צח רוקח']
+];
+const tidy = (t) => (typeof t === 'string' ? NAME_FIXES.reduce((acc, [re, to]) => acc.replace(re, to), t) : t);
+const tidyList = (xs) => (xs || []).map(tidy);
+
 const SCORING = { realfake: 'binary_correct', dilemma: 'opinion_distribution', fmk: 'three_choice_opinion', creative: 'group_vote', hotseat: 'group_prediction' };
 
 function unusableReason(r, def) {
@@ -58,8 +67,8 @@ for (const f of files) {
       correct_answer: def.engine === 'realfake' ? r.answer ?? null : null,
       candidate_answer: r.candidate ?? null,
       answer_basis: def.engine === 'realfake' && r.answer != null ? 'podcast_reveal' : null,
-      host_final_reveal_excerpt: r.reveal ?? null, reveal_note: r.reveal_note ?? null,
-      guessed_answers: r.guesses || [], panel_reactions: r.panel || [],
+      host_final_reveal_excerpt: tidy(r.reveal ?? null), reveal_note: r.reveal_note ?? null,
+      guessed_answers: tidyList(r.guesses), panel_reactions: tidyList(r.panel),
       extra: { artist: r.artist ?? null, fee: r.fee ?? null, advice: r.advice ?? null },
       scoring_kind: r.kind === 'choice' ? 'opinion_distribution' : SCORING[def.engine],
       engine: def.engine, confidence: r.conf, source_status: r.status,

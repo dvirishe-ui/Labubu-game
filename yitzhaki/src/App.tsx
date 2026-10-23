@@ -128,7 +128,7 @@ export default function App() {
 
   return (
     <>
-      <Suspense fallback={<div className="min-h-[100dvh]" />}>{screen}</Suspense>
+      <Suspense fallback={<div className="min-h-fill" />}>{screen}</Suspense>
       <Modal open={gate} onClose={() => setGate(false)} title="תוכן למבוגרים">
         <div className="space-y-4">
           <p className="text-lg leading-relaxed">חלק מהפינות כוללות שפה בוטה, הומור מיני ותוכן למבוגרים בלבד. מצב 18+ חושף אותן.</p>

@@ -4,10 +4,10 @@
   "extraction_files": 50,
   "segments": 50,
   "rounds_total": 387,
-  "rounds_usable": 291,
-  "rounds_unresolved": 96,
+  "rounds_usable": 289,
+  "rounds_unresolved": 98,
   "unresolved_by_reason": {
-    "low_confidence": 78,
+    "low_confidence": 80,
     "no_intelligible_prompt": 6,
     "needs_media": 4,
     "disabled": 7,
@@ -225,8 +225,8 @@
     {
       "source_document": "Pasted text(20261023-175337).txt",
       "rounds": 22,
-      "usable": 18,
-      "unresolved": 4,
+      "usable": 17,
+      "unresolved": 5,
       "disabled": 0,
       "games": [
         "noam-status",
@@ -237,8 +237,8 @@
     {
       "source_document": "Pasted text (2).txt",
       "rounds": 22,
-      "usable": 16,
-      "unresolved": 6,
+      "usable": 15,
+      "unresolved": 7,
       "disabled": 0,
       "games": [
         "mizrahi-song",
@@ -356,14 +356,14 @@
     {
       "id": "israel-bidur",
       "title": "ישראל בידור",
-      "playable": 33,
-      "unresolved": 28
+      "playable": 32,
+      "unresolved": 29
     },
     {
       "id": "mizrahi-song",
       "title": "שירים במזרחית",
-      "playable": 32,
-      "unresolved": 12
+      "playable": 31,
+      "unresolved": 13
     },
     {
       "id": "noam-status",

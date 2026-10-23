@@ -77,6 +77,11 @@ export default function Setup({
   return (
     <Screen>
       <TopBar onBack={onBack} title="מכינים משחק" />
+      <div className="sticky top-[env(safe-area-inset-top,0px)] z-20 -mx-4 mb-5 bg-ink-950/95 px-4 pb-3 pt-1 backdrop-blur">
+        <button className="btn-amber w-full text-2xl" disabled={!validNames || !poolSize} onClick={start}>
+          יאללה, מתחילים!
+        </button>
+      </div>
 
       <section className="mb-6">
         <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl bg-ink-800 p-1" role="tablist">
@@ -170,9 +175,6 @@ export default function Setup({
         <Toggle label="מצב 18+" on={mature} set={() => onNeedMature()} />
       </section>
 
-      <button className="btn-amber sticky bottom-4 w-full text-2xl" disabled={!validNames || !poolSize} onClick={start}>
-        יאללה, מתחילים!
-      </button>
     </Screen>
   );
 }

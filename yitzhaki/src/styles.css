@@ -10,13 +10,17 @@
 html,
 body {
   background: var(--ink);
-  overflow-x: hidden;
 }
 
 body {
   @apply font-body text-ink-200 antialiased;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
+}
+
+/* Clip sideways overflow without making html/body scroll containers:
+   that combination swallows mouse-wheel scrolling in framed views. */
+#root {
+  overflow-x: clip;
 }
 
 * {
@@ -69,4 +73,14 @@ button {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* vh first for browsers without dynamic viewport units (older Samsung Internet). */
+.min-h-fill {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.max-h-modal {
+  max-height: 88vh;
+  max-height: 88dvh;
 }

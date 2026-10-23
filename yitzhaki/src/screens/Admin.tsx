@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { ConfirmButton, copyText, Screen, TopBar } from '../components/ui';
 import { findDuplicates, importRounds } from '../lib/admin';
 import { resolveDeck, saveOverrides, openSecret, type AdminOverrides, type CustomRound } from '../lib/deck';
+import { checkEditorPassword } from '../lib/hash';
 import { unseal } from '../lib/obfuscate';
+import { load, save } from '../lib/storage';
 import type { GameMeta, Round } from '../lib/types';
 
 type Tab = 'overview' | 'rounds' | 'import' | 'dupes' | 'rules';
@@ -23,7 +25,9 @@ interface Evidence {
 }
 
 export default function Admin({ overrides, onChange, onBack }: { overrides: AdminOverrides; onChange: (o: AdminOverrides) => void; onBack: () => void }) {
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(() => load<boolean>('editor.unlocked', false));
+  const [pw, setPw] = useState('');
+  const [wrong, setWrong] = useState(false);
   const [tab, setTab] = useState<Tab>('overview');
   const { games, rounds } = useMemo(() => resolveDeck(overrides), [overrides]);
   const update = (o: AdminOverrides) => {
@@ -39,16 +43,64 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
           <p className="text-5xl">⚠️</p>
           <p className="font-display text-2xl text-cherry-400">יש פה ספוילרים</p>
           <p className="text-ink-400">מצב העורך מציג שאלות, תשובות וראיות מהתמלילים. מי שמתכנן לשחק — לא להיכנס.</p>
-          <button className="btn-cherry w-full" onClick={() => setOk(true)}>
-            אני העורך/ת, להמשיך
-          </button>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (checkEditorPassword(pw)) {
+                save('editor.unlocked', true);
+                setOk(true);
+              } else {
+                setWrong(true);
+                setPw('');
+              }
+            }}
+          >
+            <label className="label" htmlFor="editor-password">
+              סיסמה
+            </label>
+            <input
+              id="editor-password"
+              className={`input text-center tracking-[.3em] ${wrong ? 'animate-shake border-cherry-500' : ''}`}
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={pw}
+              onChange={(e) => {
+                setPw(e.target.value);
+                setWrong(false);
+              }}
+            />
+            {wrong && (
+              <p className="text-sm text-cherry-300" role="alert">
+                סיסמה שגויה. נסו שוב.
+              </p>
+            )}
+            <button className="btn-cherry w-full" disabled={!pw.trim()}>
+              כניסה למצב עורך
+            </button>
+          </form>
         </div>
       </Screen>
     );
 
   return (
     <Screen className="max-w-3xl">
-      <TopBar onBack={onBack} title="מצב עורך" />
+      <TopBar
+        onBack={onBack}
+        title="מצב עורך"
+        right={
+          <button
+            className="btn-ghost min-h-[44px] px-3 text-base"
+            onClick={() => {
+              save('editor.unlocked', false);
+              setOk(false);
+            }}
+          >
+            נעילה
+          </button>
+        }
+      />
       <nav className="mb-4 flex gap-1 overflow-x-auto rounded-2xl bg-ink-800 p-1" role="tablist">
         {(
           [
