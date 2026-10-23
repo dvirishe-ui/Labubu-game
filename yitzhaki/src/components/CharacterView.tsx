@@ -36,7 +36,7 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink-950/98 backdrop-blur" role="dialog" aria-modal aria-label={c.name}>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink-950" role="dialog" aria-modal aria-label={c.name}>
       <div className="mx-auto flex min-h-fill max-w-xl flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="mb-3 flex items-center justify-between">
           <button className="btn-ghost min-h-[44px] px-3 text-base" onClick={onClose}>
@@ -73,6 +73,7 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
                 className={`relative w-[60px] shrink-0 overflow-hidden rounded-xl border-2 transition ${sel.id === s.id ? 'scale-105' : 'opacity-70'}`}
                 style={{ borderColor: sel.id === s.id ? TIER_META[s.tier].color : '#29252f' }}
                 title={`${s.name} · ${TIER_META[s.tier].label}`}
+                aria-label={`סקין ${TIER_META[s.tier].label}: ${s.name}${have ? '' : ' (נעול)'}`}
               >
                 <Avatar charId={charId} skinId={s.id} size={56} animated={false} />
                 {!have && <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-ink-200">🔒</span>}

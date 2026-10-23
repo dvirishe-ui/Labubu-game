@@ -5,7 +5,7 @@ type Expr = 'smile' | 'grin' | 'laugh' | 'wink' | 'smirk';
 const EXPR: Record<Tier, Expr> = { classic: 'smile', special: 'grin', legendary: 'laugh', gold: 'wink', crown: 'smirk' };
 
 /** Illustrated collectible portrait. Each tier changes outfit, pose, expression, scene and lighting. */
-export function Avatar({ charId, skinId, size = 160, animated = true, locked = false }: { charId: string | null; skinId?: string | null; size?: number; animated?: boolean; locked?: boolean }) {
+export function Avatar({ charId, skinId, size = 160, animated = true, locked = false, fluid = false }: { charId: string | null; skinId?: string | null; size?: number; animated?: boolean; locked?: boolean; fluid?: boolean }) {
   const uid = useId().replace(/:/g, '');
   const c = charById(charId);
   if (!c) return <EmptyAvatar size={size} />;
@@ -16,7 +16,15 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
   const outfit = OUTFIT[tier](L);
 
   return (
-    <svg viewBox="0 0 200 240" width={size} height={(size * 240) / 200} role="img" aria-label={c.name} className={`block ${animated ? 'av-anim' : ''}`} style={locked ? { filter: 'grayscale(1) brightness(.35)' } : undefined}>
+    <svg
+      viewBox="0 0 200 240"
+      width={fluid ? '100%' : size}
+      height={fluid ? undefined : (size * 240) / 200}
+      role="img"
+      aria-label={c.name}
+      className={`block ${animated ? 'av-anim' : ''}`}
+      style={locked ? { filter: 'grayscale(.7) brightness(.5) contrast(1.1)' } : undefined}
+    >
       <defs>
         <radialGradient id={g('skin')} cx="38%" cy="32%" r="75%">
           <stop offset="0" stopColor={lighten(L.skin, 0.22)} />

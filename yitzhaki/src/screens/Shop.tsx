@@ -18,41 +18,48 @@ export default function Shop({ onBack }: { onBack: () => void }) {
   const p = useProfile();
   const [open, setOpen] = useState<string | null>(null);
   const goal = nextGoal(p);
-  const [hero, ...rest] = CHARACTERS;
+  const hero = CHARACTERS[0];
+  const starter = CHARACTERS[CHARACTERS.length - 1];
+  const middle = CHARACTERS.slice(1, -1);
 
-  const card = (id: string, big = false) => {
+  const card = (id: string, wide: false | 'hero' | 'starter' = false) => {
     const c = CHARACTERS.find((x) => x.id === id)!;
     const owned = p.owned.includes(id);
     const tier = owned ? bestTier(p.skins, id) : 'classic';
-    const equippedSkin = p.equipped.char === id ? p.equipped.skin : `${id}:${tier}`;
+    const shownSkin = owned ? (p.equipped.char === id ? p.equipped.skin : `${id}:${tier}`) : wide === 'hero' ? `${id}:legendary` : `${id}:classic`;
     const ownedSkins = owned ? skinsFor(id).filter((s) => s.tier === 'classic' || p.skins.includes(s.id)).length : 0;
+    const info = (
+      <>
+        <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: RARITY_COLOR[c.rarity] }}>
+          {wide === 'starter' && !owned ? 'הדמות הראשונה שלך?' : c.rarity}
+        </span>
+        <span className={`block font-display leading-tight text-white ${wide ? 'text-3xl' : 'text-xl'}`}>{c.name}</span>
+        {owned ? (
+          <span className="text-xs text-ink-200">
+            {ownedSkins}/{skinsFor(id).length} סקינים
+          </span>
+        ) : (
+          <Price value={c.price} dim={p.coins < c.price} />
+        )}
+        {wide === 'hero' && <span className="mt-2 block text-sm text-ink-400">הדמות הכי יוקרתית בגג, עם סקין בלעדי: מלך הגג.</span>}
+        {wide === 'starter' && !owned && <span className="mt-2 block text-sm text-ink-400">הכי נגישה בחנות — מטרה מצוינת להתחלה.</span>}
+      </>
+    );
     return (
       <button
         key={id}
         onClick={() => setOpen(id)}
-        className={`frame frame-${owned ? tier : 'classic'} group text-start transition active:scale-[.98] ${big ? 'col-span-2' : ''}`}
+        className={`frame frame-${owned ? tier : wide === 'hero' ? 'legendary' : 'classic'} group text-start transition active:scale-[.98] ${wide ? 'col-span-2' : ''}`}
         aria-label={`${c.name}${owned ? ' — באוסף' : ` — ${fmt(c.price)} מטבעות`}`}
       >
-        <div className={`relative bg-ink-900 ${big ? 'flex items-end' : ''}`}>
-          <div className={big ? 'w-1/2' : ''}>
-            <Avatar charId={id} skinId={owned ? equippedSkin : `${id}:classic`} size={big ? 200 : 170} animated={big || owned} locked={!owned} />
+        <div className={`relative h-full bg-ink-900 ${wide ? 'grid grid-cols-[1fr_42%] items-end' : ''}`}>
+          {wide && <div className="min-w-0 self-center p-4">{info}</div>}
+          <div className="relative">
+            <Avatar charId={id} skinId={shownSkin} fluid animated={!!wide || owned} locked={!owned && wide !== 'hero'} />
+            {!owned && <span className="absolute left-2 top-2 text-xl drop-shadow" aria-hidden>🔒</span>}
           </div>
-          {!owned && <span className="absolute left-2 top-2 text-2xl" aria-hidden>🔒</span>}
           {p.equipped.char === id && <span className="absolute right-2 top-2 rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-ink-950">מצויד</span>}
-          <div className={`${big ? 'flex-1 p-4' : 'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-3 pt-8'}`}>
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: RARITY_COLOR[c.rarity] }}>
-              {c.rarity}
-            </span>
-            <span className={`block font-display leading-tight text-white ${big ? 'text-3xl' : 'text-xl'}`}>{c.name}</span>
-            {owned ? (
-              <span className="text-xs text-ink-200">
-                {ownedSkins}/{skinsFor(id).length} סקינים
-              </span>
-            ) : (
-              <Price value={c.price} dim={p.coins < c.price} />
-            )}
-            {big && <span className="mt-2 block text-sm text-ink-400">הדמות הכי יוקרתית בגג. כולל סקין בלעדי: מלך הגג.</span>}
-          </div>
+          {!wide && <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-3 pt-8">{info}</div>}
         </div>
       </button>
     );
@@ -76,8 +83,9 @@ export default function Shop({ onBack }: { onBack: () => void }) {
         </section>
       )}
       <div className="grid grid-cols-2 gap-3">
-        {card(hero.id, true)}
-        {rest.map((c) => card(c.id))}
+        {card(hero.id, 'hero')}
+        {middle.map((c) => card(c.id))}
+        {card(starter.id, 'starter')}
       </div>
       <section className="card mt-6 p-4 text-sm text-ink-400">
         <p className="mb-2 font-bold text-ink-200">דרגות סקינים</p>

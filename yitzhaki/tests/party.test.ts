@@ -4,10 +4,11 @@ import WebSocket from 'ws';
 import { createPartyServer } from '../server/party-server.mjs';
 
 let port = 0;
-let srv: { server: import('node:http').Server };
+let srv: { server: import('node:http').Server; rooms: Map<string, any> };
 
 beforeAll(async () => {
   srv = createPartyServer();
+  (globalThis as any).__srv = srv;
   await new Promise<void>((r) => srv.server.listen(0, () => r()));
   port = (srv.server.address() as { port: number }).port;
 });
@@ -42,45 +43,75 @@ describe('party room server', () => {
     expect(await r.json()).toEqual({ ok: true, party: true });
   });
 
-  it('host publishes, players vote secretly, reveal scores, reconnect keeps score', async () => {
+  it('server picks rounds, hides answers and votes, scores on its own and survives reconnects', async () => {
     const host = client('host');
     await host.open;
-    host.send({ t: 'create' });
-    const joined = await host.next((m) => m.t === 'joined');
-    const code = joined.code as string;
+    host.send({ t: 'create', settings: { gameIds: ['israel-bidur'], timer: 0 } });
+    const code = (await host.next((m) => m.t === 'joined')).code as string;
 
     const a = client('pa');
     const b = client('pb');
     await Promise.all([a.open, b.open]);
-    a.send({ t: 'join', code, name: 'אלף' });
+    a.send({ t: 'join', code, name: 'אלף', char: 'tzach', skin: 'tzach:special' });
     b.send({ t: 'join', code, name: 'אלף' });
     expect((await b.next((m) => m.t === 'error')).error).toBe('name_taken');
     b.send({ t: 'join', code, name: 'בית' });
     await b.next((m) => m.t === 'joined');
+    const lobby = await host.next((m) => m.t === 'state' && m.state.players.length === 2);
+    expect(lobby.state.players.find((p: any) => p.id === 'pa')).toMatchObject({ char: 'tzach', skin: 'tzach:special' });
 
-    host.send({ t: 'publish', round: { id: 'r1', prompt: 'שאלה ניטרלית', options: { real: 'אמיתי', fake: 'המצאה' }, game: 'בדיקה', engine: 'realfake' } });
-    await a.next((m) => m.t === 'state' && m.state.phase === 'vote');
+    a.send({ t: 'next' });
+    expect((await a.next((m) => m.t === 'error' && m.error === 'host_only')).error).toBe('host_only');
+    host.send({ t: 'next' });
+    const q = await a.next((m) => m.t === 'state' && m.state.phase === 'vote');
+    const raw = JSON.stringify(q);
+    expect(q.state.round.prompt.length).toBeGreaterThan(0);
+    expect(raw).not.toMatch(/"answer"|"a":|"rv"/);
+    expect(q.state.reveal).toBeNull();
+
     a.send({ t: 'vote', choice: 'real' });
-    b.send({ t: 'vote', choice: 'fake' });
-    b.send({ t: 'vote', choice: 'nonsense' });
-    const mid = await host.next((m) => m.t === 'state' && m.state.players.every((p: any) => p.voted));
+    a.send({ t: 'vote', choice: 'nonsense' });
+    const mid = await host.next((m) => m.t === 'state' && m.state.players.find((p: any) => p.id === 'pa')?.voted);
     expect(mid.state.votes).toBeNull();
-
-    a.send({ t: 'reveal', answer: 'real' });
-    expect((await a.next((m) => m.t === 'error')).error).toBe('host_only');
-
-    host.send({ t: 'reveal', answer: 'real', note: null });
+    b.send({ t: 'vote', choice: 'fake' });
+    // everyone online voted → the server reveals by itself
     const rev = await b.next((m) => m.t === 'state' && m.state.phase === 'reveal');
+    const ans = rev.state.reveal.answer;
+    expect(['real', 'fake']).toContain(ans);
     expect(rev.state.votes).toEqual({ pa: 'real', pb: 'fake' });
-    expect(rev.state.players.find((p: any) => p.id === 'pa').score).toBe(1);
+    const winner = ans === 'real' ? 'pa' : 'pb';
+    expect(rev.state.players.find((p: any) => p.id === winner).score).toBe(1);
 
     a.ws.close();
     const a2 = client('pa');
     await a2.open;
     a2.send({ t: 'join', code });
     const back = await a2.next((m) => m.t === 'state');
-    expect(back.state.players.find((p: any) => p.id === 'pa')).toMatchObject({ score: 1, online: true });
+    expect(back.state.players.find((p: any) => p.id === 'pa')).toMatchObject({ score: winner === 'pa' ? 1 : 0, online: true });
     for (const c of [host, a2, b]) c.ws.close();
+  });
+
+  it('a timed round carries a deadline that clears on reveal', async () => {
+    const host = client('host2');
+    await host.open;
+    host.send({ t: 'create', settings: { gameIds: ['israel-bidur'], timer: 15 } });
+    const code = (await host.next((m) => m.t === 'joined')).code as string;
+    const a = client('pc');
+    await a.open;
+    a.send({ t: 'join', code, name: 'גימל' });
+    await a.next((m) => m.t === 'joined');
+    const srv = (globalThis as any).__srv;
+    host.send({ t: 'next' });
+    const q = await host.next((m) => m.t === 'state' && m.state.phase === 'vote');
+    expect(q.state.deadline).toBeGreaterThan(Date.now());
+    // fast-forward: fire the room's timer early
+    const room = srv.rooms.get(code);
+    clearTimeout(room.timer);
+    room.timer = setTimeout(() => {}, 0);
+    host.send({ t: 'reveal' });
+    const rev = await host.next((m) => m.t === 'state' && m.state.phase === 'reveal');
+    expect(rev.state.deadline).toBeNull();
+    for (const c of [host, a]) c.ws.close();
   });
 });
 

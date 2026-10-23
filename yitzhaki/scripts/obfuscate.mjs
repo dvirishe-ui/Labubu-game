@@ -24,3 +24,10 @@ export function seal(id, obj) {
   for (let i = 0; i < bytes.length; i++) bytes[i] ^= ks[i];
   return Buffer.from(bytes).toString('base64');
 }
+
+export function unseal(id, b64) {
+  const bytes = Buffer.from(b64, 'base64');
+  const ks = stream(keyFor(id), bytes.length);
+  for (let i = 0; i < bytes.length; i++) bytes[i] ^= ks[i];
+  return JSON.parse(bytes.toString('utf8'));
+}

@@ -18,6 +18,14 @@ const listeners = new Set<Listener>();
 const emit = () => listeners.forEach((l) => l());
 let toastSeq = 0;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+/** Last body written per document, so unchanged documents aren't rewritten. */
+const lastWritten = new Map<string, string>();
+function changed(key: string, body: unknown): boolean {
+  const json = JSON.stringify(body);
+  if (lastWritten.get(key) === json) return false;
+  lastWritten.set(key, json);
+  return true;
+}
 
 function set(next: Partial<State>) {
   state = { ...state, ...next };
@@ -39,10 +47,11 @@ function persist() {
   saveTimer = setTimeout(() => {
     const { cloud, profile } = state;
     if (!cloud) return;
-    void cloud.saveProfile(profile).catch(() => undefined);
-    void cloud.savePlayer(publicOf(profile, cloud.userId)).catch(() => undefined);
-    void cloud.saveAnswers(profile.answered).catch(() => undefined);
-  }, 1200);
+    const pub = publicOf(profile, cloud.userId);
+    if (changed('profile', profile)) void cloud.saveProfile(profile).catch(() => undefined);
+    if (changed('player', { ...pub, updatedAt: 0 })) void cloud.savePlayer(pub).catch(() => undefined);
+    if (changed('answers', profile.answered)) void cloud.saveAnswers(profile.answered).catch(() => undefined);
+  }, 2000);
 }
 
 export const profileStore = {

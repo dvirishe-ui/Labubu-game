@@ -4,19 +4,31 @@ import { load, save } from './storage';
 export interface PartyPlayer {
   id: string;
   name: string;
+  char: string | null;
+  skin: string | null;
   score: number;
   online: boolean;
   voted: boolean;
+}
+
+export interface PartySettings {
+  gameIds: string[];
+  mature: boolean;
+  timer: number;
+  decisionMode: 'free' | 'majority';
 }
 
 export interface PartyState {
   code: string;
   hostId: string;
   phase: 'lobby' | 'vote' | 'reveal' | 'ended';
-  round: { id: string; prompt: string; options: Record<string, string>; game: string; engine: string } | null;
+  settings: PartySettings;
+  round: { id: string; prompt: string; options: Record<string, string>; game: string; emoji: string; engine: string } | null;
+  deadline: number | null;
+  remaining: number;
   players: PartyPlayer[];
   votes: Record<string, string> | null;
-  reveal: { answer: string | null; note: string | null } | null;
+  reveal: { answer: string | null; note: string | null; majority?: string | null } | null;
   index: number;
 }
 
@@ -87,7 +99,7 @@ export function useParty() {
         } else if (m.t === 'joined') {
           setRole(m.role);
           setError(null);
-          joinMsg.current = { t: 'join', code: m.code, name: joinMsg.current?.name };
+          joinMsg.current = { ...(joinMsg.current ?? {}), t: 'join', code: m.code };
           save('party.join', joinMsg.current);
         } else if (m.t === 'error') {
           setError(ERRORS[m.error] ?? m.error);
@@ -110,12 +122,12 @@ export function useParty() {
     };
   }, [id]);
 
-  const create = () => {
+  const create = (settings?: Partial<PartySettings>) => {
     joinMsg.current = null;
-    send({ t: 'create' });
+    send({ t: 'create', settings });
   };
-  const join = (code: string, name: string) => {
-    joinMsg.current = { t: 'join', code: code.trim().toUpperCase(), name: name.trim() };
+  const join = (code: string, name: string, char: string | null, skin: string | null) => {
+    joinMsg.current = { t: 'join', code: code.trim().toUpperCase(), name: name.trim(), char, skin };
     send(joinMsg.current);
   };
   const leave = () => {

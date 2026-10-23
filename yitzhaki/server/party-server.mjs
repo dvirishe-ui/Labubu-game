@@ -1,14 +1,17 @@
-// Party Room server: serves the built app and relays room state over WebSocket.
-// The host's device keeps the deck; answers reach the server only when the host reveals.
+// Party Room server: serves the built app, runs private rooms over WebSocket, and stores profiles.
+// The server owns the question deck: it picks rounds, keeps answers secret until the reveal,
+// runs the timers and does the scoring. The host screen only sends commands.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { unseal } from '../scripts/obfuscate.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
 const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
+const DECK_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/generated/deck.json');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
 /** Tiny JSON store for profiles, leaderboards and answer statistics (self-hosted mode). */
@@ -60,6 +63,8 @@ function readBody(req, limit = 300_000) {
 export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null } = {}) {
   const rooms = new Map();
   const store = createStore(storeFile);
+  const deck = JSON.parse(fs.readFileSync(DECK_FILE, 'utf8'));
+  const gameOf = (id) => deck.games.find((g) => g.id === id);
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -116,13 +121,16 @@ export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null }
     return c;
   };
 
-  // What everyone may see. Votes stay hidden (only "has voted") until the reveal.
+  // What everyone may see. Votes stay hidden (only "has voted") and the answer never leaves the server before the reveal.
   const view = (room) => ({
     code: room.code,
     hostId: room.hostId,
     phase: room.phase,
+    settings: room.settings,
     round: room.round,
-    players: [...room.players.values()].map((p) => ({ id: p.id, name: p.name, score: p.score, online: p.sockets.size > 0, voted: p.id in room.votes })),
+    deadline: room.deadline,
+    remaining: eligible(room).filter((r) => !room.used.has(r.id)).length,
+    players: [...room.players.values()].map((p) => ({ id: p.id, name: p.name, char: p.char, skin: p.skin, score: p.score, online: p.sockets.size > 0, voted: p.id in room.votes })),
     votes: room.phase === 'reveal' ? room.votes : null,
     reveal: room.phase === 'reveal' ? room.reveal : null,
     index: room.index
@@ -132,6 +140,67 @@ export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null }
     const msg = JSON.stringify({ t: 'state', state: view(room) });
     for (const p of room.players.values()) for (const ws of p.sockets) ws.readyState === 1 && ws.send(msg);
     for (const ws of room.hostSockets) ws.readyState === 1 && ws.send(msg);
+  };
+
+  function eligible(room) {
+    const games = new Set(room.settings.gameIds);
+    return deck.rounds.filter((r) => r.u && games.has(r.g) && (room.settings.mature || !r.m) && ['realfake', 'dilemma'].includes(gameOf(r.g)?.engine) && (!r.o || r.o.length === 2));
+  }
+
+  function publishNext(room) {
+    const pool = eligible(room).filter((r) => !room.used.has(r.id));
+    if (!pool.length) {
+      room.phase = 'ended';
+      return broadcast(room);
+    }
+    const r = pool[Math.floor(Math.random() * pool.length)];
+    const g = gameOf(r.g);
+    const secret = unseal(r.id, r.x);
+    room.used.add(r.id);
+    room.current = { id: r.id, engine: g.engine, answer: g.engine === 'realfake' ? secret.a : null, note: g.engine === 'realfake' ? secret.rv : (secret.pn || []).join(' · ') || null };
+    room.round = {
+      id: r.id,
+      prompt: secret.fee ? `${r.p}\n💰 ${secret.fee}` : r.p,
+      options: r.o ? { a: r.o[0], b: r.o[1] } : g.options,
+      game: g.title,
+      emoji: g.emoji,
+      engine: g.engine
+    };
+    room.phase = 'vote';
+    room.votes = {};
+    room.reveal = null;
+    room.index += 1;
+    clearTimeout(room.timer);
+    room.deadline = room.settings.timer ? Date.now() + room.settings.timer * 1000 : null;
+    if (room.deadline) room.timer = setTimeout(() => reveal(room), room.settings.timer * 1000);
+    broadcast(room);
+  }
+
+  /** Scoring happens here, from the server's own copy of the answer. */
+  function reveal(room) {
+    if (room.phase !== 'vote') return;
+    clearTimeout(room.timer);
+    room.deadline = null;
+    room.phase = 'reveal';
+    const { answer, note, engine } = room.current;
+    room.reveal = { answer, note };
+    if (engine === 'realfake') {
+      for (const [pid, v] of Object.entries(room.votes)) if (v === answer) room.players.get(pid).score += 1;
+    } else if (room.settings.decisionMode === 'majority') {
+      const t = {};
+      for (const v of Object.values(room.votes)) t[v] = (t[v] ?? 0) + 1;
+      const ranked = Object.entries(t).sort((a, b) => b[1] - a[1]);
+      const top = ranked[0] && (!ranked[1] || ranked[1][1] < ranked[0][1]) ? ranked[0][0] : null;
+      if (top) for (const [pid, v] of Object.entries(room.votes)) if (v === top) room.players.get(pid).score += 1;
+      room.reveal.majority = top;
+    }
+    broadcast(room);
+  }
+
+  const cleanSettings = (s = {}) => {
+    const known = new Set(deck.games.map((g) => g.id));
+    const gameIds = Array.isArray(s.gameIds) ? s.gameIds.filter((id) => known.has(id)) : deck.games.filter((g) => g.engine === 'realfake' && g.count > 0).map((g) => g.id);
+    return { gameIds, mature: !!s.mature, timer: [0, 15, 20, 30].includes(s.timer) ? s.timer : 20, decisionMode: s.decisionMode === 'majority' ? 'majority' : 'free' };
   };
 
   wss.on('connection', (ws) => {
@@ -152,7 +221,7 @@ export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null }
 
       if (m.t === 'create') {
         const c = code();
-        room = { code: c, hostId: clientId, hostSockets: new Set([ws]), players: new Map(), phase: 'lobby', round: null, votes: {}, reveal: null, index: 0, touched: Date.now() };
+        room = { code: c, hostId: clientId, hostSockets: new Set([ws]), players: new Map(), phase: 'lobby', settings: cleanSettings(m.settings), round: null, current: null, votes: {}, reveal: null, index: 0, used: new Set(), deadline: null, timer: null, touched: Date.now() };
         rooms.set(c, room);
         send({ t: 'joined', role: 'host', code: c });
         return broadcast(room);
@@ -172,9 +241,12 @@ export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null }
           if (!name) return fail('no_name');
           if (r.players.size >= 12) return fail('room_full');
           if ([...r.players.values()].some((x) => x.name === name)) return fail('name_taken');
-          p = { id: clientId, name, score: 0, sockets: new Set() };
+          p = { id: clientId, name, score: 0, sockets: new Set(), char: null, skin: null };
           r.players.set(clientId, p);
         }
+        // Cosmetic only: shown in the waiting room and on the scoreboard.
+        if (typeof m.char === 'string') p.char = m.char.slice(0, 20);
+        if (typeof m.skin === 'string') p.skin = m.skin.slice(0, 30);
         p.sockets.add(ws);
         send({ t: 'joined', role: 'player', code: r.code });
         return broadcast(r);
@@ -185,34 +257,28 @@ export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null }
 
       if (m.t === 'vote') {
         if (room.phase !== 'vote' || !room.players.has(clientId)) return;
-        const allowed = Object.keys(room.round?.options || {});
-        if (!allowed.includes(m.choice)) return;
+        if (!Object.keys(room.round?.options || {}).includes(m.choice)) return;
         room.votes[clientId] = m.choice;
+        const online = [...room.players.values()].filter((p) => p.sockets.size > 0);
+        if (online.length && online.every((p) => p.id in room.votes)) return reveal(room);
         return broadcast(room);
       }
       if (!isHost) return fail('host_only');
-      if (m.t === 'publish') {
-        const r = m.round || {};
-        room.round = { id: String(r.id), prompt: String(r.prompt).slice(0, 600), options: r.options, game: r.game, engine: r.engine };
-        room.phase = 'vote';
-        room.votes = {};
-        room.reveal = null;
-        room.index += 1;
+      if (m.t === 'settings') {
+        room.settings = cleanSettings(m.settings);
         return broadcast(room);
       }
-      if (m.t === 'reveal') {
-        if (room.phase !== 'vote') return;
-        const answer = typeof m.answer === 'string' ? m.answer : null;
-        room.phase = 'reveal';
-        room.reveal = { answer, note: m.note ? String(m.note).slice(0, 400) : null };
-        if (answer) for (const [pid, v] of Object.entries(room.votes)) if (v === answer) room.players.get(pid).score += 1;
-        return broadcast(room);
+      if (m.t === 'next') {
+        if (room.phase === 'vote') return;
+        return publishNext(room);
       }
+      if (m.t === 'reveal') return reveal(room);
       if (m.t === 'kick') {
         room.players.delete(m.playerId);
         return broadcast(room);
       }
       if (m.t === 'end') {
+        clearTimeout(room.timer);
         room.phase = 'ended';
         broadcast(room);
         rooms.delete(room.code);
@@ -229,7 +295,11 @@ export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null }
 
   const sweep = setInterval(() => {
     const now = Date.now();
-    for (const [c, r] of rooms) if (now - r.touched > ROOM_TTL_MS) rooms.delete(c);
+    for (const [c, r] of rooms)
+      if (now - r.touched > ROOM_TTL_MS) {
+        clearTimeout(r.timer);
+        rooms.delete(c);
+      }
   }, 60_000);
   server.on('close', () => clearInterval(sweep));
 
