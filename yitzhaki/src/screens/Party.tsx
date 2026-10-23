@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Scoreboard, Screen, TopBar } from '../components/ui';
+import { ConfirmButton, copyText, Scoreboard, Screen, TopBar } from '../components/ui';
 import { drawRounds, loadSeen, markSeen, openSecret, playablePool } from '../lib/deck';
 import { useParty } from '../lib/party';
 import { newSeed } from '../lib/rng';
@@ -96,7 +96,7 @@ function Host({ p, games, rounds, mature, onExit }: { p: P; games: GameMeta[]; r
           <p className="text-ink-400">נכנסים מהטלפון לכתובת הזאת ומקלידים את הקוד:</p>
           <p className="my-2 break-all text-sm text-amber-300">{joinUrl}</p>
           <p className="font-display text-7xl tracking-[.3em] text-amber-400">{s.code}</p>
-          <button className="btn-ghost mt-3 text-base" onClick={() => navigator.clipboard?.writeText(joinUrl)}>
+          <button className="btn-ghost mt-3 text-base" onClick={() => void copyText(joinUrl)}>
             העתקת קישור
           </button>
         </section>
@@ -147,9 +147,15 @@ function Host({ p, games, rounds, mature, onExit }: { p: P; games: GameMeta[]; r
 
       <span className="label">שחקנים</span>
       <Scoreboard items={s.players.map((x) => ({ id: x.id, name: `${x.online ? '' : '💤 '}${x.name}${s.phase === 'vote' && x.voted ? ' ✓' : ''}`, score: x.score }))} />
-      <button className="btn-ghost mt-6 w-full" onClick={() => confirm('לסגור את החדר לכולם?') && (p.send({ t: 'end' }), onExit())}>
-        סגירת החדר
-      </button>
+      <ConfirmButton
+        className="btn-ghost mt-6 w-full"
+        label="סגירת החדר"
+        confirmLabel="לסגור לכולם? הקישו שוב"
+        onConfirm={() => {
+          p.send({ t: 'end' });
+          onExit();
+        }}
+      />
     </Screen>
   );
 }

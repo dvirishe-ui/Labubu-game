@@ -97,7 +97,14 @@ export default function App() {
       screen = <Notes onBack={() => go({ name: 'home' })} />;
       break;
     case 'party':
-      screen = <Party games={games} rounds={rounds} mature={mature} onBack={() => (history.replaceState(null, '', location.pathname), go({ name: 'home' }))} />;
+      screen = <Party games={games} rounds={rounds} mature={mature} onBack={() => {
+            try {
+              history.replaceState(null, '', location.pathname);
+            } catch {
+              /* sandboxed viewer */
+            }
+            go({ name: 'home' });
+          }} />;
       break;
     case 'admin':
       screen = <Admin overrides={overrides} onChange={setOverrides} onBack={() => go({ name: 'home' })} />;

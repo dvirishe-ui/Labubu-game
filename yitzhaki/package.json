@@ -9,7 +9,8 @@
     "build": "node scripts/build-data.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "start": "node server/party-server.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:single": "node scripts/build-data.mjs && node scripts/build-single.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

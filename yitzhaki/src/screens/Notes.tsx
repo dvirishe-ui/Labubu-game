@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Confetti, Modal, Screen, Timer, TopBar } from '../components/ui';
+import { ConfirmButton, Confetti, Modal, Screen, Timer, TopBar } from '../components/ui';
 import { createNotes, guessed, NOTE_ROUNDS, SAMPLE_SLIPS, skipped, startTurn, timeUp, totals, type NotesState } from '../lib/notes';
 import { newSeed, shuffle } from '../lib/rng';
 import { sfx } from '../lib/sound';
@@ -230,9 +230,7 @@ function NotesGame({ state, setState, onBack }: { state: NotesState; setState: (
           </div>
         </div>
       )}
-      <button className="mt-6 self-center text-sm text-ink-400 underline" onClick={() => confirm('לסיים את המשחק?') && setState(null)}>
-        סיום משחק
-      </button>
+      <ConfirmButton className="mt-6 self-center text-sm text-ink-400 underline" label="סיום משחק" confirmLabel="לסיים? הקישו שוב" onConfirm={() => setState(null)} />
       <RulesModal open={rules} onClose={() => setRules(false)} />
     </Screen>
   );

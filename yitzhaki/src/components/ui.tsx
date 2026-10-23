@@ -164,3 +164,27 @@ export function Scoreboard({ items, highlight }: { items: { id: string; name: st
     </ol>
   );
 }
+
+/** Two-tap confirmation (browser confirm() dialogs are unavailable in embedded viewers). */
+export function ConfirmButton({ className, label, confirmLabel = 'בטוח? הקישו שוב', onConfirm }: { className: string; label: string; confirmLabel?: string; onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button className={`${className} ${armed ? '!text-cherry-300' : ''}`} onClick={() => (armed ? (setArmed(false), onConfirm()) : setArmed(true))}>
+      {armed ? confirmLabel : label}
+    </button>
+  );
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Screen, TopBar } from '../components/ui';
+import { ConfirmButton, copyText, Screen, TopBar } from '../components/ui';
 import { findDuplicates, importRounds } from '../lib/admin';
 import { resolveDeck, saveOverrides, openSecret, type AdminOverrides, type CustomRound } from '../lib/deck';
 import { unseal } from '../lib/obfuscate';
@@ -73,15 +73,10 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
   );
 }
 
-function download(name: string, data: unknown) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function Overview({ games, rounds, overrides, onReset, onLoad }: { games: GameMeta[]; rounds: Round[]; overrides: AdminOverrides; onReset: () => void; onLoad: (o: AdminOverrides) => void }) {
   const usable = rounds.filter((r) => r.usable).length;
+  const [exported, setExported] = useState<string | null>(null);
+  const [msg, setMsg] = useState('');
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -119,7 +114,14 @@ function Overview({ games, rounds, overrides, onReset, onLoad }: { games: GameMe
         </tbody>
       </table>
       <div className="grid gap-2 sm:grid-cols-3">
-        <button className="btn-ghost text-base" onClick={() => download('editor-overrides.json', overrides)}>
+        <button
+          className="btn-ghost text-base"
+          onClick={async () => {
+            const json = JSON.stringify(overrides, null, 2);
+            setExported(json);
+            setMsg((await copyText(json)) ? 'השינויים הועתקו ללוח.' : 'סמנו והעתיקו את הטקסט למטה.');
+          }}
+        >
           ייצוא שינויים
         </button>
         <label className="btn-ghost cursor-pointer text-base">
@@ -135,15 +137,15 @@ function Overview({ games, rounds, overrides, onReset, onLoad }: { games: GameMe
                 const o = JSON.parse(await f.text());
                 onLoad({ edits: o.edits ?? {}, custom: o.custom ?? [], rules: o.rules ?? {} });
               } catch {
-                alert('קובץ לא תקין');
+                setMsg('הקובץ לא תקין — צריך JSON שיוצא ממצב העורך.');
               }
             }}
           />
         </label>
-        <button className="btn-ghost text-base text-cherry-300" onClick={() => confirm('למחוק את כל השינויים מהמכשיר?') && onReset()}>
-          איפוס שינויים
-        </button>
+        <ConfirmButton className="btn-ghost text-base text-cherry-300" label="איפוס שינויים" confirmLabel="למחוק הכל? הקישו שוב" onConfirm={onReset} />
       </div>
+      {msg && <p className="text-sm text-amber-300">{msg}</p>}
+      {exported && <textarea className="input min-h-[160px] py-2 font-mono text-xs" dir="ltr" readOnly value={exported} onFocus={(e) => e.target.select()} aria-label="שינויים מיוצאים" />}
       <p className="text-sm text-ink-400">השינויים נשמרים במכשיר הזה. כדי להכניס אותם למאגר הקבוע: ייצוא → מיזוג לתיקיית data/extraction → npm run build.</p>
     </div>
   );
