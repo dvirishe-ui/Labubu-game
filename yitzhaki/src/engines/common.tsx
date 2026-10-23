@@ -1,15 +1,19 @@
 import { useState, type ReactNode } from 'react';
 import { PassScreen } from '../components/ui';
 import { sfx } from '../lib/sound';
-import type { GameMeta, Participant, Round, SessionConfig } from '../lib/types';
+import type { RoundMeta } from '../lib/session';
+import type { GameMeta, Participant, Round, SessionConfig, Step } from '../lib/types';
 
 export interface EngineProps {
   round: Round;
+  /** All rounds of this step (e.g. both items of an impostor round). */
+  rounds: Round[];
+  step: Step;
   game: GameMeta;
   participants: Participant[];
   config: SessionConfig;
   roundIndex: number;
-  onDone: (deltas: Record<string, number>) => void;
+  onDone: (deltas: Record<string, number>, meta?: RoundMeta) => void;
 }
 
 export function PromptCard({ game, children, footer }: { game: GameMeta; children: ReactNode; footer?: ReactNode }) {

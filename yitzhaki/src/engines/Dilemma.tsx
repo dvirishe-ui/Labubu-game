@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Timer } from '../components/ui';
 import { openSecret } from '../lib/deck';
-import { majority, scoreMajorityPrediction, tally } from '../lib/scoring';
+import { majority, minorityVoters, scoreMajority, scoreMajorityPrediction, scoreMinority, tally } from '../lib/scoring';
 import { sfx } from '../lib/sound';
 import { NextButton, PodcastNote, PromptCard, VoteGrid, useSecretTurns, type EngineProps } from './common';
 
@@ -10,7 +10,7 @@ interface Ballot {
   predict?: string;
 }
 
-export default function Dilemma({ round, game, participants, config, onDone }: EngineProps) {
+export default function Dilemma({ round, game, participants, config, step, roundIndex, onDone }: EngineProps) {
   const options: [string, string][] = round.choices?.length === 2 ? [['a', round.choices[0]], ['b', round.choices[1]]] : (Object.entries(game.options) as [string, string][]);
   const label = Object.fromEntries(options);
   const secretInfo = useMemo(() => openSecret(round), [round]);
@@ -20,8 +20,12 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
   const [stage, setStage] = useState<'vote' | 'predict'>('vote');
   const [pending, setPending] = useState<string | null>(null);
   const secret = useSecretTurns<Ballot>(participants);
-  const useSecret = config.secretVotes;
-  const handMode = !useSecret && config.mode === 'players' && participants.length > 4;
+  const mode = step.mode ?? config.decisionMode ?? (config.predictMajority ? 'predict' : 'free');
+  const useSecret = config.secretVotes || mode === 'predict' || mode === 'whochose';
+  const handMode = !useSecret && mode === 'free' && config.mode === 'players' && participants.length > 4;
+  const target = participants[roundIndex % participants.length];
+  const [guesses, setGuesses] = useState<Record<string, string>>({});
+  const [guessDone, setGuessDone] = useState(false);
 
   useEffect(() => {
     if (useSecret && secret.done && phase === 'vote') reveal();
@@ -41,7 +45,22 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
   const predictions: Record<string, string> = useSecret
     ? Object.fromEntries(Object.entries(secret.results).flatMap(([k, b]) => (b.predict ? [[k, b.predict]] : [])))
     : {};
-  const deltas = config.predictMajority && useSecret ? scoreMajorityPrediction(votes, predictions) : {};
+  const deltas: Record<string, number> =
+    mode === 'predict'
+      ? scoreMajorityPrediction(votes, predictions)
+      : mode === 'majority'
+        ? scoreMajority(votes)
+        : mode === 'minority'
+          ? scoreMinority(votes)
+          : mode === 'whochose' && guessDone
+            ? Object.fromEntries(Object.entries(guesses).map(([pid, g]) => [pid, g === votes[target.id] ? 1 : 0]))
+            : {};
+  const modeNote: Record<string, string> = {
+    majority: 'הרוב קובע: נקודה למי שבחר כמו הרוב.',
+    minority: 'הכבשה השחורה: נקודה למי שבחר כמו המיעוט.',
+    predict: 'נקודה למי שניחש מה הרוב יבחר.',
+    whochose: `אחרי ההצבעה: מנחשים מה ${target.name} בחר/ה.`
+  };
 
   const prompt = (
     <PromptCard
@@ -57,6 +76,7 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
       <div className="space-y-4">
         {prompt}
         <p className="text-center text-ink-400">אין פה תשובה נכונה. תתווכחו — ואז מצביעים.</p>
+        {modeNote[mode] && <p className="text-center text-sm font-bold text-amber-300">{modeNote[mode]}</p>}
         <Timer seconds={config.timer} running onEnd={() => setPhase('vote')} keyId={round.id + ':debate'} />
         <button className="btn-amber w-full text-xl" onClick={() => setPhase('vote')}>
           להצבעה
@@ -67,7 +87,7 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
 
   if (phase === 'vote' && useSecret && !secret.done) {
     const pick = (v: string) => {
-      if (!config.predictMajority) return secret.submit({ vote: v });
+      if (mode !== 'predict') return secret.submit({ vote: v });
       sfx.tap();
       setPending(v);
       setStage('predict');
@@ -127,6 +147,22 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
     );
   }
 
+  if (mode === 'whochose' && !guessDone && votes[target.id]) {
+    const guessers = participants.filter((x) => x.id !== target.id);
+    return (
+      <div className="space-y-4">
+        {prompt}
+        <p className="text-center text-lg">
+          מה <b className="text-amber-300">{target.name}</b> בחר/ה?
+        </p>
+        <VoteGrid participants={guessers} options={options} votes={guesses} onVote={(pid, v) => setGuesses((g) => ({ ...g, [pid]: v }))} />
+        <button className="btn-amber w-full text-xl" disabled={!Object.keys(guesses).length} onClick={() => setGuessDone(true)}>
+          חשיפה
+        </button>
+      </div>
+    );
+  }
+
   const t = tally(votes);
   const total = Object.values(t).reduce((a, b) => a + b, 0) || 1;
   const m = majority(votes);
@@ -162,7 +198,15 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
             )}
           </div>
         )}
-        {config.predictMajority && useSecret && (
+        {mode === 'whochose' && votes[target.id] && (
+          <p className="text-sm text-ink-400">
+            {target.name} בחר/ה: <b className="text-white">{label[votes[target.id]]}</b> · צדקו: {participants.filter((p) => deltas[p.id]).map((p) => p.name).join(', ') || 'אף אחד'}
+          </p>
+        )}
+        {(mode === 'majority' || mode === 'minority') && (
+          <p className="text-sm text-ink-400">נקודה ל: {participants.filter((p) => deltas[p.id]).map((p) => p.name).join(', ') || 'אף אחד (תיקו)'}</p>
+        )}
+        {mode === 'predict' && (
           <p className="text-sm text-ink-400">נקודה למי שניחש מה הרוב יגיד: {participants.filter((p) => deltas[p.id]).map((p) => p.name).join(', ') || 'אף אחד'}</p>
         )}
       </div>
@@ -175,7 +219,7 @@ export default function Dilemma({ round, game, participants, config, onDone }: E
           </ul>
         </PodcastNote>
       )}
-      <NextButton onClick={() => onDone(deltas)} />
+      <NextButton onClick={() => onDone(deltas, { unpopular: handMode ? [] : minorityVoters(votes) })} />
     </div>
   );
 }

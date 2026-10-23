@@ -7,3 +7,4 @@ ios/
 *.log
 .DS_Store
 server/rest-sync-db.json
+yitzhaki/server/data/

@@ -102,7 +102,7 @@ export default function RealFake({ round, game, participants, config, onDone }: 
               </ul>
             </PodcastNote>
           )}
-          <NextButton onClick={() => onDone(deltas)} />
+          <NextButton onClick={() => onDone(deltas, { correct: Object.keys(deltas).filter((k) => deltas[k] > 0), answeredBy: Object.keys(votes) })} />
         </div>
       )}
     </div>

@@ -83,3 +83,19 @@ describe('party room server', () => {
     for (const c of [host, a2, b]) c.ws.close();
   });
 });
+
+describe('self-hosted store', () => {
+  it('stores profiles, players and answers', async () => {
+    const base = `http://localhost:${port}/api/store`;
+    const put = (p: string, body: unknown) => fetch(`${base}/${p}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    expect((await put('profile/cabc12345', { coins: 5 })).status).toBe(200);
+    expect(await (await fetch(`${base}/profile/cabc12345`)).json()).toEqual({ coins: 5 });
+    await put('players/cabc12345', { name: 'א', days: {} });
+    await put('crowd/cabc12345', { a: { q1: 'real' } });
+    expect(await (await fetch(`${base}/players`)).json()).toEqual([{ name: 'א', days: {}, id: 'cabc12345' }]);
+    expect(await (await fetch(`${base}/crowd`)).json()).toEqual([{ a: { q1: 'real' }, id: 'cabc12345' }]);
+    expect((await put('players/a%2Fb', {})).status).toBe(400);
+    expect((await put('players/ok-id-1', [1, 2])).status).toBe(400);
+    expect((await fetch(`${base}/profile`)).status).toBe(400);
+  });
+});

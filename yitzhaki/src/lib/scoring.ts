@@ -67,3 +67,21 @@ export function standings(ps: Participant[]): { leaders: Participant[]; ranked: 
   const top = ranked[0]?.score ?? 0;
   return { leaders: ranked.filter((p) => p.score === top), ranked };
 }
+
+/** "הרוב קובע": a point for everyone who voted with the majority (no points on a tie). */
+export function scoreMajority(votes: Votes): Record<string, number> {
+  const m = majority(votes);
+  return Object.fromEntries(Object.entries(votes).map(([pid, v]) => [pid, m && v === m ? 1 : 0]));
+}
+
+/** "הכבשה השחורה": a point for the minority (needs 3+ voters and a clear minority). */
+export function scoreMinority(votes: Votes): Record<string, number> {
+  const m = majority(votes);
+  const n = Object.keys(votes).length;
+  return Object.fromEntries(Object.entries(votes).map(([pid, v]) => [pid, n >= 3 && m && v !== m ? 1 : 0]));
+}
+
+export function minorityVoters(votes: Votes): string[] {
+  const m = majority(votes);
+  return m ? Object.entries(votes).filter(([, v]) => v !== m).map(([pid]) => pid) : [];
+}

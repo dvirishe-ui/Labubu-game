@@ -129,7 +129,7 @@ export default function HotSeat({ round, game, participants, roundIndex, onDone 
             {deltas[seat.id] ? `${seat.name} עבד/ה על רוב השופטים: +2` : 'צדקו: ' + (judges.filter((j) => deltas[j.id]).map((j) => j.name).join(', ') || 'אף אחד')}
           </p>
           {disclaimer}
-          <NextButton onClick={() => onDone(deltas)} />
+          <NextButton onClick={() => onDone(deltas, { fooled: deltas[seat.id] ? { [seat.id]: judges.length - judges.filter((j) => deltas[j.id]).length } : {} })} />
         </div>
       )}
     </div>

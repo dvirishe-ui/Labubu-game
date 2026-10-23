@@ -1,5 +1,21 @@
 export type Engine = 'realfake' | 'dilemma' | 'fmk' | 'creative' | 'hotseat';
 
+/** New party mechanics layered on podcast content (not podcast segments themselves). */
+export type Mechanic = 'impostor' | 'whowrote' | 'bluff' | 'knows' | 'battle' | 'invent' | 'majority' | 'minority';
+
+export type StepEngine = Engine | Exclude<Mechanic, 'majority' | 'minority'>;
+
+export type DecisionMode = 'free' | 'majority' | 'minority' | 'predict' | 'whochose';
+
+export interface Step {
+  engine: StepEngine;
+  gameId: string;
+  roundIds: string[];
+  /** Decision scoring for dilemma steps; index into INVENT_PROMPTS for invent steps. */
+  mode?: DecisionMode;
+  promptIndex?: number;
+}
+
 export interface GameMeta {
   id: string;
   title: string;
@@ -69,4 +85,9 @@ export interface SessionConfig {
   predictMajority: boolean;
   mature: boolean;
   seed: string;
+  /** Party mechanics to mix in (from the friends hub or party night). */
+  mechanics?: Mechanic[];
+  decisionMode?: DecisionMode;
+  /** Party night length in minutes; the session ends after the round in which time runs out. */
+  minutes?: number;
 }

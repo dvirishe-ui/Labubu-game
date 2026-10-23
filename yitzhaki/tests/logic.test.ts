@@ -102,13 +102,14 @@ describe('party flow on one device', () => {
   });
 
   it('4 players, 10 rounds, then a rematch with unseen questions', () => {
-    const s = createSession(cfg(), rounds);
-    expect(s.roundIds).toHaveLength(10);
+    const s = createSession(cfg(), games, rounds);
+    const ids = s.steps.map((x) => x.roundIds[0]);
+    expect(ids).toHaveLength(10);
     const byId = new Map(rounds.map((r) => [r.id, r]));
     // red-line is 18+, so with mature off it never appears
-    expect(s.roundIds.every((id) => byId.get(id)!.gameId === 'israel-bidur')).toBe(true);
+    expect(ids.every((id) => byId.get(id)!.gameId === 'israel-bidur')).toBe(true);
     let ps = s.participants;
-    for (const id of s.roundIds) {
+    for (const id of ids) {
       const a = openSecret(byId.get(id)!).a!;
       ps = applyDeltas(ps, scoreBinary({ p0: a, p1: a === 'real' ? 'fake' : 'real', p2: a }, a));
       markSeen([id]);
@@ -116,22 +117,23 @@ describe('party flow on one device', () => {
     expect(ps.find((p) => p.id === 'p0')!.score).toBe(10);
     expect(ps.find((p) => p.id === 'p1')!.score).toBe(0);
     expect(standings(ps).leaders.map((p) => p.id).sort()).toEqual(['p0', 'p2']);
-    const again = createSession(cfg({ seed: 'two' }), rounds);
-    expect(again.roundIds.some((id) => s.roundIds.includes(id))).toBe(false);
+    const again = createSession(cfg({ seed: 'two' }), games, rounds);
+    expect(again.steps.some((x) => ids.includes(x.roundIds[0]))).toBe(false);
   });
 
   it('marathon plays every unseen round once', () => {
-    const s = createSession(cfg({ length: 'marathon', gameIds: ['student-film'] }), rounds);
+    const s = createSession(cfg({ length: 'marathon', gameIds: ['student-film'] }), games, rounds);
     const pool = playablePool(rounds, ['student-film'], false);
-    expect(new Set(s.roundIds)).toEqual(new Set(pool.map((r) => r.id)));
-    markSeen(s.roundIds);
+    const ids = s.steps.map((x) => x.roundIds[0]);
+    expect(new Set(ids)).toEqual(new Set(pool.map((r) => r.id)));
+    markSeen(ids);
     expect(loadSeen().size).toBe(pool.length);
     // exhausted → next marathon starts over
-    expect(createSession(cfg({ length: 'marathon', gameIds: ['student-film'], seed: 'z' }), rounds).roundIds).toHaveLength(pool.length);
+    expect(createSession(cfg({ length: 'marathon', gameIds: ['student-film'], seed: 'z' }), games, rounds).steps).toHaveLength(pool.length);
   });
 
   it('team mode scores per team', () => {
-    const s = createSession(cfg({ mode: 'teams', participants: [{ id: 't1', name: 'הגג', score: 0 }, { id: 't2', name: 'המרפסת', score: 0 }] }), rounds);
+    const s = createSession(cfg({ mode: 'teams', participants: [{ id: 't1', name: 'הגג', score: 0 }, { id: 't2', name: 'המרפסת', score: 0 }] }), games, rounds);
     const ps = applyDeltas(s.participants, { t1: 1 });
     expect(ps.map((p) => p.score)).toEqual([1, 0]);
   });

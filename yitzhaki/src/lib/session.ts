@@ -1,37 +1,73 @@
-import { drawRounds, loadSeen, playablePool, resetSeen } from './deck';
+import { loadSeen, playablePool, resetSeen } from './deck';
+import { buildSteps } from './plan';
 import { newSeed } from './rng';
 import { load, remove, save } from './storage';
-import type { Participant, Round, SessionConfig } from './types';
+import type { GameMeta, Participant, Round, SessionConfig, Step } from './types';
+
+/** What an engine reports besides points, for recaps and coin eligibility. */
+export interface RoundMeta {
+  /** Participants who answered a factual question correctly this round. */
+  correct?: string[];
+  /** Participants who answered a factual question at all. */
+  answeredBy?: string[];
+  /** Points won by bluffing / fooling others. */
+  fooled?: Record<string, number>;
+  /** Participants who voted with the minority on a dilemma. */
+  unpopular?: string[];
+}
+
+export interface StepLog {
+  deltas: Record<string, number>;
+  meta: RoundMeta;
+  scores: Record<string, number>;
+  skipped?: boolean;
+}
 
 export interface Session {
+  id: string;
   config: SessionConfig;
-  roundIds: string[];
+  steps: Step[];
   index: number;
   participants: Participant[];
   recycled: boolean;
+  startedAt: number;
+  log: StepLog[];
 }
 
-export function createSession(config: SessionConfig, rounds: Round[]): Session {
-  const pool = playablePool(rounds, config.gameIds, config.mature);
+export function createSession(config: SessionConfig, games: GameMeta[], rounds: Round[]): Session {
   let seen = loadSeen();
-  if (config.length === 'marathon' && pool.every((r) => seen.has(r.id))) {
+  const pool = playablePool(rounds, config.gameIds, config.mature);
+  if (config.length === 'marathon' && !config.mechanics?.length && pool.every((r) => seen.has(r.id))) {
     resetSeen(pool.map((r) => r.id));
     seen = loadSeen();
   }
-  const { picked, recycled } = drawRounds(pool, config.length === 'marathon' ? 'all' : config.length, seen, config.seed);
-  if (recycled) resetSeen(pool.map((r) => r.id));
+  let steps = buildSteps(config, games, rounds, seen);
+  const fresh = steps.every((s) => s.roundIds.every((id) => !seen.has(id)));
+  if (!fresh && !config.minutes && !config.mechanics?.length) resetSeen(pool.map((r) => r.id));
+  if (!steps.length) steps = buildSteps({ ...config, seed: config.seed + ':retry' }, games, rounds, new Set());
   return {
+    id: newSeed() + newSeed(),
     config,
-    roundIds: picked.map((r) => r.id),
+    steps,
     index: 0,
     participants: config.participants.map((p) => ({ ...p, score: 0 })),
-    recycled
+    recycled: !fresh,
+    startedAt: Date.now(),
+    log: []
   };
 }
 
-export function rematch(s: Session, rounds: Round[]): Session {
-  return createSession({ ...s.config, seed: newSeed() }, rounds);
+export function rematch(s: Session, games: GameMeta[], rounds: Round[]): Session {
+  return createSession({ ...s.config, seed: newSeed() }, games, rounds);
 }
 
-export const saveSession = (s: Session | null) => (s ? save('session', s) : remove('session'));
-export const loadSession = () => load<Session | null>('session', null);
+/** Party night ends once its time is used up (checked after each round). */
+export function timeUp(s: Session, now = Date.now()): boolean {
+  return !!s.config.minutes && now - s.startedAt >= s.config.minutes * 60_000;
+}
+
+export const saveSession = (s: Session | null) => (s ? save('session.v2', s) : remove('session.v2'));
+export const loadSession = () => {
+  const s = load<Session | null>('session.v2', null);
+  return s && Array.isArray(s.steps) ? s : null;
+};

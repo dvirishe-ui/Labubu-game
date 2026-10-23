@@ -11,11 +11,84 @@ const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist
 const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
-export function createPartyServer() {
+/** Tiny JSON store for profiles, leaderboards and answer statistics (self-hosted mode). */
+function createStore(file) {
+  let data = { profile: {}, players: {}, crowd: {} };
+  if (file && fs.existsSync(file)) {
+    try {
+      data = { ...data, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
+    } catch {
+      /* start fresh on a corrupt file */
+    }
+  }
+  let timer = null;
+  const flush = () => {
+    if (!file) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(data));
+    }, 300);
+  };
+  return { data, flush };
+}
+
+const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+
+function readBody(req, limit = 300_000) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(new Error('too_large'));
+        req.destroy();
+      } else chunks.push(c);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null } = {}) {
   const rooms = new Map();
+  const store = createStore(storeFile);
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
+    const sm = url.pathname.match(/^\/api\/store\/(profile|players|crowd)(?:\/([^/]+))?$/);
+    if (sm) {
+      const [, kind, id] = sm;
+      const json = (code, body) => {
+        res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(body));
+      };
+      if (req.method === 'GET' && !id && kind !== 'profile') {
+        const rows = Object.entries(store.data[kind]).map(([rid, v]) => ({ ...v, id: rid }));
+        return json(200, rows);
+      }
+      if (!id || !ID_RE.test(id)) return json(400, { error: 'bad_id' });
+      if (req.method === 'GET') return json(200, store.data[kind][id] ?? null);
+      if (req.method === 'PUT') {
+        readBody(req)
+          .then((body) => {
+            if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'bad_body' });
+            store.data[kind][id] = body;
+            store.flush();
+            json(200, { ok: true });
+          })
+          .catch(() => json(400, { error: 'bad_body' }));
+        return;
+      }
+      return json(405, { error: 'method' });
+    }
     if (url.pathname === '/api/health') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       return res.end(JSON.stringify({ ok: true, party: true }));
@@ -160,10 +233,10 @@ export function createPartyServer() {
   }, 60_000);
   server.on('close', () => clearInterval(sweep));
 
-  return { server, rooms };
+  return { server, rooms, store };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { server } = createPartyServer();
+  const { server } = createPartyServer({ storeFile: process.env.STORE_FILE ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'data/store.json') });
   server.listen(PORT, () => console.log(`המשחקייה על הגג — http://localhost:${PORT}`));
 }
