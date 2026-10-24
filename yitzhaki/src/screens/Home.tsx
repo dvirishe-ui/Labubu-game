@@ -1,17 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { CoinPill, fmt, Price } from '../components/Coins';
 import { ProfileChip } from '../components/Profile';
 import { Modal, MuteButton, Screen, Skyline, Wordmark } from '../components/ui';
 import { CHARACTERS } from '../lib/characters';
-import { nextGoal } from '../lib/economy';
+import { nextGoal, rosterOwned } from '../lib/economy';
 import type { Session } from '../lib/session';
 import { useProfile } from '../lib/store';
 import { dayKey } from '../lib/time';
 import type { GameMeta } from '../lib/types';
 import { CATEGORIES, type SetupPreset } from './Setup';
 
-export type Nav = 'solo' | 'friends' | 'daily' | 'shop' | 'collection' | 'notes' | 'party' | 'admin' | 'night';
+export type Nav = 'solo' | 'friends' | 'daily' | 'shop' | 'collection' | 'notes' | 'party' | 'admin' | 'night' | 'timemachine';
 
 export default function Home({
   games,
@@ -39,6 +39,16 @@ export default function Home({
   const total = playable.reduce((n, g) => n + g.count, 0);
   const dailyDone = !!p.daily[dayKey()];
   const goal = nextGoal(p);
+  // Secret: five quick taps on the logo open the time machine.
+  const taps = useRef<number[]>([]);
+  const tapLogo = () => {
+    const now = Date.now();
+    taps.current = [...taps.current.filter((t) => now - t < 2500), now];
+    if (taps.current.length >= 5) {
+      taps.current = [];
+      onNav('timemachine');
+    }
+  };
 
   const tile = (n: Nav, icon: string, title: string, sub: string, extra = '') => (
     <button
@@ -64,7 +74,9 @@ export default function Home({
         <CoinPill coins={p.coins} onClick={() => onNav('shop')} />
         <MuteButton />
       </div>
-      <Wordmark small />
+      <div onClick={tapLogo} className="cursor-default">
+        <Wordmark small />
+      </div>
 
       <button
         onClick={() => onNav('night')}
@@ -118,7 +130,7 @@ export default function Home({
         </button>
         <button onClick={() => onNav('collection')} className="card flex min-h-[132px] flex-col justify-between p-4 text-start active:scale-[.98]">
           <span className="flex -space-x-3 space-x-reverse" aria-hidden>
-            {(p.owned.length ? p.owned : ['tzach', 'tal', 'dor']).slice(0, 3).map((id) => (
+            {(rosterOwned(p).length ? rosterOwned(p) : ['tzach', 'tal', 'dor']).slice(0, 3).map((id) => (
               <span key={id} className="h-10 w-10 overflow-hidden rounded-full border-2 border-ink-900 bg-ink-800">
                 <Avatar charId={id} skinId={`${id}:classic`} size={40} animated={false} locked={!p.owned.includes(id)} />
               </span>
@@ -127,7 +139,7 @@ export default function Home({
           <span>
             <span className="block font-display text-xl text-white">האוסף שלי</span>
             <span className="block text-xs text-ink-400">
-              {p.owned.length}/{CHARACTERS.length} דמויות · {Object.keys(p.achievements).length} הישגים
+              {rosterOwned(p).length}/{CHARACTERS.length} דמויות · {Object.keys(p.achievements).length} הישגים
             </span>
           </span>
         </button>

@@ -1,4 +1,4 @@
-import { CHARACTERS, CROWN_SKIN, charById, skinById } from './characters';
+import { CHARACTERS, CROWN_SKIN, charById, isSecret, SECRET_CHARACTER, SECRET_SKIN, skinById } from './characters';
 import { levelOf, type Profile } from './profile';
 import { dayKey, weekKey } from './time';
 
@@ -46,8 +46,13 @@ export interface AchievementDef {
   title: string;
   desc: string;
   reward: number;
+  /** Hidden achievements show as "???" until unlocked. */
+  secret?: boolean;
   test: (p: Profile) => boolean;
 }
+
+/** Roster characters owned (the secret character doesn't count toward the 8). */
+export const rosterOwned = (p: Profile) => p.owned.filter((id) => !isSecret(id));
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'first-game', title: 'הדייר החדש', desc: 'סיימת משחק ראשון', reward: 100, test: (p) => p.stats.games >= 1 },
@@ -63,9 +68,10 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'bluff', title: 'מלך הבלוף', desc: 'עבדת על 10 שחקנים בבלוף', reward: 300, test: (p) => p.stats.bluffWins >= 10 },
   { id: 'party-night', title: 'ערב על הגג', desc: 'סיימת ערב על הגג', reward: 200, test: (p) => p.stats.partyNights >= 1 },
   { id: 'first-skin', title: 'סטייל', desc: 'קנית סקין ראשון', reward: 100, test: (p) => p.skins.some((s) => !s.endsWith(':classic')) },
-  { id: 'collector-3', title: 'אספן מתחיל', desc: '3 דמויות באוסף', reward: 300, test: (p) => p.owned.length >= 3 },
-  { id: 'full-panel', title: 'הפאנל המלא', desc: 'כל 8 הדמויות', reward: 500, test: (p) => p.owned.length >= CHARACTERS.length },
-  { id: 'roof-legend', title: 'אגדת הגג', desc: 'הסקין "מלך הגג" של אסף', reward: 500, test: (p) => p.skins.includes(CROWN_SKIN.id) }
+  { id: 'collector-3', title: 'אספן מתחיל', desc: '3 דמויות באוסף', reward: 300, test: (p) => rosterOwned(p).length >= 3 },
+  { id: 'full-panel', title: 'הפאנל המלא', desc: 'כל 8 הדמויות', reward: 500, test: (p) => rosterOwned(p).length >= CHARACTERS.length },
+  { id: 'roof-legend', title: 'אגדת הגג', desc: 'הסקין "מלך הגג" של אסף', reward: 500, test: (p) => p.skins.includes(CROWN_SKIN.id) },
+  { id: 'time-travel', title: 'נוסע בזמן', desc: 'פגשת את נועם אונגר מהעתיד', reward: 500, secret: true, test: (p) => p.owned.includes(SECRET_CHARACTER.id) }
 ];
 
 function clone(p: Profile): Profile {
@@ -243,6 +249,8 @@ export function priceOf(itemId: string): number | null {
 }
 
 export function canBuy(p: Profile, itemId: string): BuyError | null {
+  // The secret character and its skin are never for sale.
+  if (isSecret(itemId) || itemId === SECRET_SKIN.id) return p.owned.includes(SECRET_CHARACTER.id) ? 'owned' : 'locked';
   const c = charById(itemId);
   if (c) return p.owned.includes(c.id) ? 'owned' : p.coins < c.price ? 'coins' : null;
   const s = skinById(itemId);
@@ -267,9 +275,19 @@ export function buy(p: Profile, itemId: string): Result & { error: BuyError | nu
   return { ...settle(q, []), error: null };
 }
 
+/** Called by the time-machine mini-game when 2066 is reached. Idempotent. */
+export function unlockSecret(p: Profile): Result {
+  if (p.owned.includes(SECRET_CHARACTER.id)) return { profile: p, events: [] };
+  const q = clone(p);
+  q.owned.push(SECRET_CHARACTER.id);
+  q.skins.push(SECRET_SKIN.id);
+  return settle(q, [], 150);
+}
+
 export function equip(p: Profile, skinId: string): Profile {
   const s = skinById(skinId);
   if (!s || !p.owned.includes(s.charId) || !(s.tier === 'classic' || p.skins.includes(s.id))) return p;
+  // equipping works the same for the secret character once it's unlocked
   return { ...p, equipped: { char: s.charId, skin: s.id }, rev: p.rev + 1 };
 }
 

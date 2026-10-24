@@ -23,8 +23,11 @@ describe('roster', () => {
       expect(s[1].price).toBeLessThanOrEqual(4000);
       expect(s[2].price).toBeGreaterThanOrEqual(7500);
       expect(s[2].price).toBeLessThanOrEqual(12000);
-      expect(s[3].price).toBe(25000);
+      expect(s[3].price).toBeGreaterThanOrEqual(23000);
+      expect(s[3].price).toBeLessThanOrEqual(28000);
     }
+    const prices = CHARACTERS.flatMap((c) => skinsFor(c.id).filter((x) => x.price > 0).map((x) => x.price));
+    expect(new Set(prices).size).toBe(prices.length);
     expect(skinsFor('assaf').at(-1)).toMatchObject({ id: CROWN_SKIN.id, price: 40000 });
     expect(skinsFor('tzach').some((s) => s.tier === 'crown')).toBe(false);
   });
@@ -140,5 +143,25 @@ describe('levels and calendar', () => {
     expect(days).toHaveLength(7);
     expect(days).toContain(dayKey(T0));
     expect(new Date(days[0] + 'T12:00:00Z').getUTCDay()).toBe(1);
+  });
+});
+
+describe('secret character', () => {
+  it('cannot be bought, unlocks once from the mini-game, and can be equipped', async () => {
+    const { SECRET_CHARACTER, SECRET_SKIN, CHARACTERS: roster } = await import('../src/lib/characters');
+    const { unlockSecret, rosterOwned } = await import('../src/lib/economy');
+    let p = { ...newProfile(T0), coins: 1_000_000 };
+    expect(roster.some((c) => c.id === SECRET_CHARACTER.id)).toBe(false);
+    expect(buy(p, SECRET_CHARACTER.id).error).toBe('locked');
+    expect(buy(p, SECRET_SKIN.id).error).toBe('locked');
+    const r = unlockSecret(p);
+    p = r.profile;
+    expect(p.owned).toContain(SECRET_CHARACTER.id);
+    expect(p.achievements['time-travel']).toBeTruthy();
+    expect(rosterOwned(p)).toHaveLength(0);
+    expect(p.achievements['collector-3']).toBeFalsy();
+    expect(unlockSecret(p).profile).toBe(p);
+    expect(equip(p, SECRET_SKIN.id).equipped).toEqual({ char: SECRET_CHARACTER.id, skin: SECRET_SKIN.id });
+    expect(normalizeProfile(p).owned).toContain(SECRET_CHARACTER.id);
   });
 });

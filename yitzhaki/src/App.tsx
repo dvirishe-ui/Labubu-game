@@ -24,6 +24,7 @@ const Duel = lazy(() => import('./screens/Duel'));
 const Shop = lazy(() => import('./screens/Shop'));
 const Collection = lazy(() => import('./screens/Collection'));
 const Friends = lazy(() => import('./screens/Friends'));
+const TimeMachine = lazy(() => import('./screens/TimeMachine'));
 
 type View =
   | { name: 'home' }
@@ -199,6 +200,9 @@ export default function App() {
       break;
     case 'collection':
       screen = <Collection onBack={home} onShop={() => go({ name: 'shop' })} />;
+      break;
+    case 'timemachine':
+      screen = <TimeMachine onBack={home} />;
       break;
     case 'friends':
       screen = <Friends partyAvailable={party} onBack={home} onNav={nav} onDuel={() => go({ name: 'duel', initial: null })} onPlay={(preset) => go({ name: 'setup', preset, back: 'friends' })} />;

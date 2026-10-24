@@ -4,9 +4,9 @@ import { CharacterView } from '../components/CharacterView';
 import { CoinPill, fmt } from '../components/Coins';
 import { NameSheet, XpBar } from '../components/Profile';
 import { Screen, TopBar } from '../components/ui';
-import { ALL_SKINS, CHARACTERS, skinsFor, TIER_META } from '../lib/characters';
-import { ACHIEVEMENTS, WEEKLY_GOALS, REWARDS } from '../lib/economy';
-import { useProfile } from '../lib/store';
+import { ALL_SKINS, CHARACTERS, SECRET_CHARACTER, SECRET_SKIN, skinById, skinsFor, TIER_META } from '../lib/characters';
+import { ACHIEVEMENTS, equip, rosterOwned, WEEKLY_GOALS, REWARDS } from '../lib/economy';
+import { profileStore, useProfile } from '../lib/store';
 import { weekKey } from '../lib/time';
 import { bestTier } from './Shop';
 
@@ -16,10 +16,12 @@ export default function Collection({ onBack, onShop }: { onBack: () => void; onS
   const [rename, setRename] = useState(false);
   const paidSkins = ALL_SKINS.filter((s) => s.tier !== 'classic');
   const ownedPaid = paidSkins.filter((s) => p.skins.includes(s.id)).length;
-  const pct = Math.round(((p.owned.length + ownedPaid) / (CHARACTERS.length + paidSkins.length)) * 100);
+  const owned = rosterOwned(p);
+  const hasSecret = p.owned.includes(SECRET_CHARACTER.id);
+  const pct = Math.round(((owned.length + ownedPaid) / (CHARACTERS.length + paidSkins.length)) * 100);
   const week = p.week.key === weekKey() ? p.week : { key: '', correct: 0, games: 0, dailies: 0 };
   const weeklyDone = !!p.claimed[`weekly:${weekKey()}`];
-  const eqTier = p.equipped.skin ? ALL_SKINS.find((s) => s.id === p.equipped.skin)?.tier ?? 'classic' : 'classic';
+  const eqTier = skinById(p.equipped.skin)?.tier ?? 'classic';
 
   return (
     <Screen>
@@ -45,7 +47,7 @@ export default function Collection({ onBack, onShop }: { onBack: () => void; onS
       <section className="mb-5">
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="font-display text-2xl text-white">
-            {p.owned.length}/{CHARACTERS.length} דמויות
+            {owned.length}/{CHARACTERS.length} דמויות
           </h2>
           <span className="text-sm text-ink-400">{pct}% מהאוסף המלא</span>
         </div>
@@ -68,11 +70,32 @@ export default function Collection({ onBack, onShop }: { onBack: () => void; onS
         </div>
       </section>
 
-      {p.owned.length > 0 && (
+      {hasSecret && (
+        <section className="mb-5">
+          <span className="label">סודי</span>
+          <button
+            className="frame frame-secret flex w-full text-start"
+            onClick={() => profileStore.update((x) => equip(x, SECRET_SKIN.id))}
+            aria-label={`${SECRET_CHARACTER.name} — לצייד`}
+          >
+            <div className="flex w-full items-center gap-3 bg-ink-900 p-2">
+              <span className="w-20 shrink-0">
+                <Avatar charId={SECRET_CHARACTER.id} skinId={SECRET_SKIN.id} size={80} animated={false} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-xl text-white">{SECRET_CHARACTER.name}</span>
+                <span className="text-sm text-cyan-300">{p.equipped.char === SECRET_CHARACTER.id ? 'מצויד ✓' : 'הקישו כדי לצייד'}</span>
+              </span>
+            </div>
+          </button>
+        </section>
+      )}
+
+      {owned.length > 0 && (
         <section className="mb-5">
           <span className="label">סקינים</span>
           <div className="space-y-2">
-            {p.owned.map((id) => {
+            {owned.map((id) => {
               const c = CHARACTERS.find((x) => x.id === id)!;
               return (
                 <button key={id} className="card flex w-full items-center gap-3 p-3 text-start" onClick={() => setOpen(id)}>
@@ -139,6 +162,13 @@ export default function Collection({ onBack, onShop }: { onBack: () => void; onS
         <div className="grid grid-cols-2 gap-2">
           {ACHIEVEMENTS.map((a) => {
             const on = !!p.achievements[a.id];
+            if (a.secret && !on)
+              return (
+                <div key={a.id} className="rounded-2xl border border-dashed border-ink-700 bg-ink-900 p-3 opacity-60">
+                  <div className="font-bold text-ink-400">🔒 ???</div>
+                  <p className="text-xs text-ink-400">הישג סודי</p>
+                </div>
+              );
             return (
               <div key={a.id} className={`rounded-2xl border p-3 ${on ? 'border-amber-400/50 bg-amber-400/10' : 'border-ink-700 bg-ink-900 opacity-60'}`}>
                 <div className="flex items-center gap-2">

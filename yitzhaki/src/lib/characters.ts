@@ -1,5 +1,5 @@
 // The shop roster is fixed at these eight panelists. Adding anyone needs explicit approval.
-export type Tier = 'classic' | 'special' | 'legendary' | 'gold' | 'crown';
+export type Tier = 'classic' | 'special' | 'legendary' | 'gold' | 'crown' | 'secret';
 
 export interface CharacterDef {
   id: string;
@@ -27,7 +27,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 20000,
     rarity: 'מיתי',
     look: { skin: '#e8b48f', hair: 'swoop', hairColor: '#2a1d16', beard: 'stubble', glasses: false, accent: '#ffbe3b', accent2: '#e0243f', prop: 'mic' },
-    skinPrices: { special: 4000, legendary: 12000, gold: 25000 }
+    skinPrices: { special: 4000, legendary: 12000, gold: 28000 }
   },
   {
     id: 'yonatan',
@@ -35,7 +35,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 12000,
     rarity: 'אגדי',
     look: { skin: '#d9a07a', hair: 'curly', hairColor: '#1d1410', beard: 'full', glasses: false, accent: '#8b5cf6', accent2: '#22d3ee', prop: 'headphones' },
-    skinPrices: { special: 3500, legendary: 10000, gold: 25000 }
+    skinPrices: { special: 3800, legendary: 11000, gold: 27000 }
   },
   {
     id: 'chen',
@@ -43,7 +43,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 10000,
     rarity: 'אפי',
     look: { skin: '#c98d66', hair: 'buzz', hairColor: '#1a1310', beard: 'goatee', glasses: false, accent: '#10b981', accent2: '#ffbe3b', prop: 'chain' },
-    skinPrices: { special: 3000, legendary: 9000, gold: 25000 }
+    skinPrices: { special: 3500, legendary: 10000, gold: 26000 }
   },
   {
     id: 'matan',
@@ -51,7 +51,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 10000,
     rarity: 'אפי',
     look: { skin: '#e2a982', hair: 'wavy', hairColor: '#3b2a1e', beard: 'stubble', glasses: true, accent: '#3b82f6', accent2: '#f472b6', prop: 'notebook' },
-    skinPrices: { special: 3000, legendary: 9000, gold: 25000 }
+    skinPrices: { special: 3300, legendary: 9500, gold: 25500 }
   },
   {
     id: 'noam',
@@ -59,7 +59,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 9000,
     rarity: 'אפי',
     look: { skin: '#edc19c', hair: 'spiky', hairColor: '#4a3426', beard: 'none', glasses: false, accent: '#f97316', accent2: '#a3e635', prop: 'phone' },
-    skinPrices: { special: 3000, legendary: 8500, gold: 25000 }
+    skinPrices: { special: 3100, legendary: 9000, gold: 25000 }
   },
   {
     id: 'dor',
@@ -67,7 +67,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 7000,
     rarity: 'נדיר',
     look: { skin: '#b97f5a', hair: 'cap', hairColor: '#120d0a', beard: 'mustache', glasses: false, accent: '#ef4444', accent2: '#fbbf24', prop: 'sneaker' },
-    skinPrices: { special: 2500, legendary: 8000, gold: 25000 }
+    skinPrices: { special: 2900, legendary: 8500, gold: 24000 }
   },
   {
     id: 'tal',
@@ -75,7 +75,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 7000,
     rarity: 'נדיר',
     look: { skin: '#f0c7a6', hair: 'bun', hairColor: '#5b3a24', beard: 'full', glasses: true, accent: '#06b6d4', accent2: '#f43f5e', prop: 'coffee' },
-    skinPrices: { special: 2500, legendary: 8000, gold: 25000 }
+    skinPrices: { special: 2700, legendary: 8000, gold: 23500 }
   },
   {
     id: 'tzach',
@@ -83,18 +83,33 @@ export const CHARACTERS: CharacterDef[] = [
     price: 5000,
     rarity: 'נדיר',
     look: { skin: '#d6a07c', hair: 'beanie', hairColor: '#2b1f17', beard: 'stubble', glasses: false, accent: '#eab308', accent2: '#6366f1', prop: 'shades' },
-    skinPrices: { special: 2500, legendary: 7500, gold: 25000 }
+    skinPrices: { special: 2500, legendary: 7500, gold: 23000 }
   }
 ];
 
 export const CROWN_SKIN = { id: 'assaf:crown', charId: 'assaf', name: 'מלך הגג', price: 40000 };
+
+/**
+ * Secret character: never listed in the shop and can't be bought.
+ * Unlocked only by finishing the hidden "מכונת הזמן" mini-game.
+ */
+export const SECRET_CHARACTER: CharacterDef = {
+  id: 'noam-future',
+  name: 'נועם אונגר מהעתיד',
+  price: 0,
+  rarity: 'מיתי',
+  look: { skin: '#8a665a', hair: 'wavy', hairColor: '#9ca3af', beard: 'none', glasses: false, accent: '#22d3ee', accent2: '#a855f7', prop: 'phone' },
+  skinPrices: { special: 0, legendary: 0, gold: 0 }
+};
+export const SECRET_SKIN = { id: 'noam-future:secret', charId: SECRET_CHARACTER.id, name: 'מהעתיד', price: 0 };
 
 export const TIER_META: Record<Tier, { label: string; color: string; glow: string }> = {
   classic: { label: 'קלאסי', color: '#9ca3af', glow: 'rgba(156,163,175,.35)' },
   special: { label: 'מיוחד', color: '#22d3ee', glow: 'rgba(34,211,238,.45)' },
   legendary: { label: 'אגדי', color: '#a855f7', glow: 'rgba(168,85,247,.6)' },
   gold: { label: 'זהב', color: '#ffbe3b', glow: 'rgba(255,190,59,.7)' },
-  crown: { label: 'מלך הגג', color: '#fff1a8', glow: 'rgba(255,214,102,.85)' }
+  crown: { label: 'מלך הגג', color: '#fff1a8', glow: 'rgba(255,214,102,.85)' },
+  secret: { label: 'סודי', color: '#67e8f9', glow: 'rgba(103,232,249,.75)' }
 };
 
 export interface SkinDef {
@@ -105,7 +120,7 @@ export interface SkinDef {
   price: number;
 }
 
-const SKIN_NAMES: Record<Exclude<Tier, 'crown'>, string> = {
+const SKIN_NAMES: Record<Exclude<Tier, 'crown' | 'secret'>, string> = {
   classic: 'על הגג',
   special: 'ערב פתוח',
   legendary: 'ספיישל בנטפליקס',
@@ -113,6 +128,7 @@ const SKIN_NAMES: Record<Exclude<Tier, 'crown'>, string> = {
 };
 
 export function skinsFor(charId: string): SkinDef[] {
+  if (charId === SECRET_CHARACTER.id) return [{ ...SECRET_SKIN, tier: 'secret' }];
   const c = CHARACTERS.find((x) => x.id === charId)!;
   const list: SkinDef[] = [
     { id: `${charId}:classic`, charId, tier: 'classic', name: SKIN_NAMES.classic, price: 0 },
@@ -124,6 +140,9 @@ export function skinsFor(charId: string): SkinDef[] {
   return list;
 }
 
+/** Shop skins (the secret character's skin is not part of the shop or the collection percentage). */
 export const ALL_SKINS: SkinDef[] = CHARACTERS.flatMap((c) => skinsFor(c.id));
-export const charById = (id: string | null | undefined) => CHARACTERS.find((c) => c.id === id) ?? null;
-export const skinById = (id: string | null | undefined) => ALL_SKINS.find((s) => s.id === id) ?? null;
+const EVERY_SKIN: SkinDef[] = [...ALL_SKINS, ...skinsFor(SECRET_CHARACTER.id)];
+export const charById = (id: string | null | undefined) => CHARACTERS.find((c) => c.id === id) ?? (id === SECRET_CHARACTER.id ? SECRET_CHARACTER : null);
+export const skinById = (id: string | null | undefined) => EVERY_SKIN.find((s) => s.id === id) ?? null;
+export const isSecret = (id: string | null | undefined) => id === SECRET_CHARACTER.id;

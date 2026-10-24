@@ -1,16 +1,29 @@
 import { useId, type ReactNode } from 'react';
+import { FACE_TONES, FACES } from '../generated/faces';
 import { charById, skinById, type CharacterDef, type Tier } from '../lib/characters';
 
 type Expr = 'smile' | 'grin' | 'laugh' | 'wink' | 'smirk';
-const EXPR: Record<Tier, Expr> = { classic: 'smile', special: 'grin', legendary: 'laugh', gold: 'wink', crown: 'smirk' };
+const EXPR: Record<Tier, Expr> = { classic: 'smile', special: 'grin', legendary: 'laugh', gold: 'wink', crown: 'smirk', secret: 'smile' };
+
+/** Per-tier treatment of the photo head: [glow colour, glow size, colour matrix]. */
+const FACE_FX: Record<Tier, [string, number, string | null]> = {
+  classic: ['#000000', 3, null],
+  special: ['#ff4dc4', 3, '1.05 0 0 0 0  0 1 0 0 0  0 0 1.08 0 0  0 0 0 1 0'],
+  legendary: ['#a855f7', 4, '1.05 0.02 0.08 0 0  0 0.98 0.06 0 0  0.06 0.02 1.12 0 0  0 0 0 1 0'],
+  gold: ['#ffbe3b', 4, '1.08 0.1 0.02 0 0.02  0.06 1.02 0.02 0 0.01  0 0 0.82 0 0  0 0 0 1 0'],
+  crown: ['#fff1a8', 5, '1.08 0.06 0 0 0.02  0.04 1.02 0 0 0.01  0 0 0.92 0 0  0 0 0 1 0'],
+  secret: ['#67e8f9', 5, '0.9 0.05 0.1 0 0  0.05 1 0.1 0 0  0.1 0.15 1.15 0 0.02  0 0 0 1 0']
+};
 
 /** Illustrated collectible portrait. Each tier changes outfit, pose, expression, scene and lighting. */
 export function Avatar({ charId, skinId, size = 160, animated = true, locked = false, fluid = false }: { charId: string | null; skinId?: string | null; size?: number; animated?: boolean; locked?: boolean; fluid?: boolean }) {
   const uid = useId().replace(/:/g, '');
   const c = charById(charId);
   if (!c) return <EmptyAvatar size={size} />;
-  const tier: Tier = skinById(skinId)?.tier ?? 'classic';
-  const L = c.look;
+  const tier: Tier = skinById(skinId)?.tier ?? (c.id === 'noam-future' ? 'secret' : 'classic');
+  const face = FACES[c.id];
+  const L = face ? { ...c.look, skin: FACE_TONES[c.id] ?? c.look.skin } : c.look;
+  const [fxColor, fxSize, fxMatrix] = FACE_FX[tier];
   const g = (n: string) => `${uid}-${n}`;
   const url = (n: string) => `url(#${g(n)})`;
   const outfit = OUTFIT[tier](L);
@@ -23,7 +36,7 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
       role="img"
       aria-label={c.name}
       className={`block ${animated ? 'av-anim' : ''}`}
-      style={locked ? { filter: 'grayscale(.7) brightness(.5) contrast(1.1)' } : undefined}
+      style={locked ? { filter: 'grayscale(.55) brightness(.68) contrast(1.05)' } : undefined}
     >
       <defs>
         <radialGradient id={g('skin')} cx="38%" cy="32%" r="75%">
@@ -48,6 +61,10 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
           <stop offset=".45" stopColor="#ffbe3b" />
           <stop offset="1" stopColor="#a66a00" />
         </linearGradient>
+        <filter id={g('face')} x="-20%" y="-20%" width="140%" height="140%">
+          {fxMatrix && <feColorMatrix type="matrix" values={fxMatrix} />}
+          <feDropShadow dx="0" dy={tier === 'classic' ? 2 : 0} stdDeviation={fxSize} floodColor={fxColor} floodOpacity={tier === 'classic' ? 0.45 : 0.85} />
+        </filter>
         <radialGradient id={g('rim')} cx="50%" cy="42%" r="78%">
           <stop offset=".62" stopColor={RIM[tier]} stopOpacity="0" />
           <stop offset="1" stopColor={RIM[tier]} stopOpacity=".42" />
@@ -74,17 +91,26 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
       <Arms tier={tier} c={c} url={url} />
 
       {/* neck & head */}
-      <path d="M86 122 L86 148 Q100 158 114 148 L114 122 Z" fill={darken(L.skin, 0.18)} />
-      <ellipse cx="61" cy="96" rx="7" ry="10" fill={darken(L.skin, 0.1)} />
-      <ellipse cx="139" cy="96" rx="7" ry="10" fill={darken(L.skin, 0.1)} />
-      <ellipse cx="100" cy="92" rx="38" ry="44" fill={url('skin')} />
-      <Beard kind={L.beard} url={url} color={L.hairColor} />
-      <Face expr={EXPR[tier]} skin={L.skin} />
-      {L.glasses && <Glasses gold={tier === 'gold' || tier === 'crown'} url={url} />}
-      {(L.prop === 'shades' && tier !== 'classic') && <Shades />}
-      <Hair kind={L.hair} url={url} L={L} tier={tier} />
-      {L.prop === 'headphones' && <Headphones color={tier === 'gold' || tier === 'crown' ? url('gold') : L.accent} />}
-      {tier === 'crown' && <Crown url={url} />}
+      {!face && <path d="M86 122 L86 148 Q100 158 114 148 L114 122 Z" fill={darken(L.skin, 0.18)} />}
+      {face ? (
+        <>
+          <image href={face} x="40" y="16" width="120" height="144" preserveAspectRatio="xMidYMid meet" filter={`url(#${g('face')})`} />
+          {tier === 'crown' && <Crown url={url} lift={-14} />}
+        </>
+      ) : (
+        <>
+          <ellipse cx="61" cy="96" rx="7" ry="10" fill={darken(L.skin, 0.1)} />
+          <ellipse cx="139" cy="96" rx="7" ry="10" fill={darken(L.skin, 0.1)} />
+          <ellipse cx="100" cy="92" rx="38" ry="44" fill={url('skin')} />
+          <Beard kind={L.beard} url={url} color={L.hairColor} />
+          <Face expr={EXPR[tier]} skin={L.skin} />
+          {L.glasses && <Glasses gold={tier === 'gold' || tier === 'crown'} url={url} />}
+          {L.prop === 'shades' && tier !== 'classic' && <Shades />}
+          <Hair kind={L.hair} url={url} L={L} tier={tier} />
+          {L.prop === 'headphones' && <Headphones color={tier === 'gold' || tier === 'crown' ? url('gold') : L.accent} />}
+          {tier === 'crown' && <Crown url={url} />}
+        </>
+      )}
       <rect width="200" height="240" fill={url('rim')} pointerEvents="none" />
       {tier !== 'classic' && <Sparkles tier={tier} g={g} />}
     </svg>
@@ -102,14 +128,15 @@ function EmptyAvatar({ size }: { size: number }) {
   );
 }
 
-const RIM: Record<Tier, string> = { classic: '#ffbe3b', special: '#ff4dc4', legendary: '#a855f7', gold: '#ffd76a', crown: '#fff1a8' };
+const RIM: Record<Tier, string> = { classic: '#ffbe3b', special: '#ff4dc4', legendary: '#a855f7', gold: '#ffd76a', crown: '#fff1a8', secret: '#67e8f9' };
 
 const OUTFIT: Record<Tier, (L: CharacterDef['look']) => { main: string; second: string }> = {
   classic: (L) => ({ main: L.accent, second: L.accent2 }),
   special: (L) => ({ main: '#1f2937', second: L.accent }),
   legendary: () => ({ main: '#4c1d95', second: '#c026d3' }),
   gold: () => ({ main: '#b7791f', second: '#fde68a' }),
-  crown: () => ({ main: '#7f1d1d', second: '#fef3c7' })
+  crown: () => ({ main: '#7f1d1d', second: '#fef3c7' }),
+  secret: () => ({ main: '#94a3b8', second: '#22d3ee' })
 };
 
 function Scene({ tier, L, g, url }: { tier: Tier; L: CharacterDef['look']; g: (n: string) => string; url: (n: string) => string }) {
@@ -197,6 +224,32 @@ function Scene({ tier, L, g, url }: { tier: Tier; L: CharacterDef['look']; g: (n
         <path d="M0 240 V196 h20 v-20 h16 v20 h12 v-36 h24 v36 h56 v-28 h18 v-18 h10 v46 h20 v-30 h24 v70 z" fill="#7c4a03" opacity=".7" />
       </g>
     );
+  if (tier === 'secret')
+    return (
+      <g>
+        <defs>
+          <radialGradient id={g('portal')} cx="50%" cy="42%" r="70%">
+            <stop offset="0" stopColor="#ecfeff" />
+            <stop offset=".25" stopColor="#22d3ee" />
+            <stop offset=".6" stopColor="#3b0764" />
+            <stop offset="1" stopColor="#05030a" />
+          </radialGradient>
+        </defs>
+        <rect width="200" height="240" fill={url('portal')} />
+        <g className={g('spin')}>
+          {[34, 52, 70, 88].map((r, i) => (
+            <circle key={r} cx="100" cy="110" r={r} fill="none" stroke={i % 2 ? '#a855f7' : '#67e8f9'} strokeWidth="2" strokeDasharray={`${6 + i * 3} ${8 + i * 2}`} opacity={0.75 - i * 0.12} />
+          ))}
+        </g>
+        <path d="M0 240 L100 175 L200 240 Z" fill="#22d3ee" opacity=".08" />
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <path key={i} d={`M${100 - (i + 1) * 30} 240 L100 175 L${100 + (i + 1) * 30} 240`} stroke="#67e8f9" strokeOpacity=".25" fill="none" />
+        ))}
+        <text x="100" y="26" textAnchor="middle" fontSize="13" fill="#67e8f9" fontFamily="Secular One, sans-serif" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }}>
+          2066
+        </text>
+      </g>
+    );
   return (
     <g>
       <defs>
@@ -254,6 +307,15 @@ function Outfit({ tier, L, url }: { tier: Tier; L: CharacterDef['look']; url: (n
         <path d="M78 146 Q60 190 70 240 L58 240 Q48 196 70 148 Z" fill={L.accent} />
         <path d="M122 146 Q140 190 130 240 L142 240 Q152 196 130 148 Z" fill={L.accent} />
         <path d="M86 146 L100 176 L114 146 Z" fill="#0f0a1a" />
+      </g>
+    );
+  if (tier === 'secret')
+    return (
+      <g>
+        <path d="M78 146 Q100 166 122 146 L126 152 Q100 176 74 152 Z" fill="#e2e8f0" />
+        <path d="M100 166 V240" stroke="#22d3ee" strokeWidth="3" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }} />
+        <path d="M56 200 H86 M114 200 H144" stroke="#a855f7" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="100" cy="196" r="7" fill="#0f172a" stroke="#67e8f9" strokeWidth="2" />
       </g>
     );
   if (tier === 'gold')
@@ -327,7 +389,7 @@ function Arms({ tier, c, url }: { tier: Tier; c: CharacterDef; url: (n: string) 
   const hand = L.skin;
   const holds = ['mic', 'coffee', 'notebook', 'phone', 'sneaker'].includes(L.prop) ? L.prop : 'mic';
   if (tier === 'classic') return null;
-  if (tier === 'special')
+  if (tier === 'special' || tier === 'secret')
     return (
       <g>
         <path d="M150 178 Q158 210 134 214 L124 204 Q140 198 138 182 Z" fill={sleeve} />
@@ -503,9 +565,9 @@ function Headphones({ color }: { color: string }) {
   );
 }
 
-function Crown({ url }: { url: (n: string) => string }) {
+function Crown({ url, lift = 0 }: { url: (n: string) => string; lift?: number }) {
   return (
-    <g>
+    <g transform={`translate(0 ${lift})`}>
       <path d="M66 52 L72 22 L86 40 L100 16 L114 40 L128 22 L134 52 Z" fill={url('gold')} stroke="#7c4a03" strokeWidth="2" />
       <circle cx="100" cy="30" r="4" fill="#ef4444" />
       <circle cx="80" cy="44" r="3" fill="#3b82f6" />

@@ -98,9 +98,10 @@ button {
 .frame > * { border-radius: calc(1.5rem - 3px); overflow: hidden; }
 .frame-classic { background: linear-gradient(160deg, #4b4553, #29252f); }
 .frame-special { background: linear-gradient(160deg, #22d3ee, #ff4dc4); box-shadow: 0 0 22px rgba(34, 211, 238, 0.25); }
-.frame-legendary, .frame-gold, .frame-crown { background: conic-gradient(from var(--a, 0deg), var(--c1), var(--c2), var(--c1), var(--c3), var(--c1)); animation: frame-spin 4s linear infinite; }
+.frame-legendary, .frame-gold, .frame-crown, .frame-secret { background: conic-gradient(from var(--a, 0deg), var(--c1), var(--c2), var(--c1), var(--c3), var(--c1)); animation: frame-spin 4s linear infinite; }
 .frame-legendary { --c1: #7c3aed; --c2: #f0abfc; --c3: #c026d3; box-shadow: 0 0 30px rgba(168, 85, 247, 0.45); }
 .frame-gold { --c1: #a66a00; --c2: #fff3b0; --c3: #ffbe3b; box-shadow: 0 0 34px rgba(255, 190, 59, 0.5); }
+.frame-secret { --c1: #0e7490; --c2: #67e8f9; --c3: #a855f7; box-shadow: 0 0 40px rgba(103, 232, 249, 0.6); }
 .frame-crown { --c1: #b91c1c; --c2: #fff1a8; --c3: #ffbe3b; box-shadow: 0 0 44px rgba(255, 214, 102, 0.65); }
 @property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @keyframes frame-spin { to { --a: 360deg; } }

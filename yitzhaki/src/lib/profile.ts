@@ -1,4 +1,4 @@
-import { CHARACTERS } from './characters';
+import { CHARACTERS, SECRET_CHARACTER } from './characters';
 
 export interface SoloRunState {
   seed: string;
@@ -113,7 +113,7 @@ export function normalizeProfile(raw: unknown): Profile {
   const base = newProfile();
   if (!raw || typeof raw !== 'object') return base;
   const p = raw as Partial<Profile>;
-  const known = new Set(CHARACTERS.map((c) => c.id));
+  const known = new Set([...CHARACTERS.map((c) => c.id), SECRET_CHARACTER.id]);
   return {
     ...base,
     ...p,
