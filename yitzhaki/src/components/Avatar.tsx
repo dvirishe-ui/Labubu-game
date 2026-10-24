@@ -1,19 +1,8 @@
 import { useId, type ReactNode } from 'react';
-import { FACE_GEO, FACE_TONES, FACES } from '../generated/faces';
 import { charById, skinById, type CharacterDef, type Tier } from '../lib/characters';
+import { GameHead, headTop, HEADS, type Expr } from './heads';
 
-type Expr = 'smile' | 'grin' | 'laugh' | 'wink' | 'smirk';
 const EXPR: Record<Tier, Expr> = { classic: 'smile', special: 'grin', legendary: 'laugh', gold: 'wink', crown: 'smirk', secret: 'smile' };
-
-/** Per-tier treatment of the photo head: [glow colour, glow size, colour matrix]. */
-const FACE_FX: Record<Tier, [string, number, string | null]> = {
-  classic: ['#000000', 3, null],
-  special: ['#ff4dc4', 3, '1.05 0 0 0 0  0 1 0 0 0  0 0 1.08 0 0  0 0 0 1 0'],
-  legendary: ['#a855f7', 4, '1.05 0.02 0.08 0 0  0 0.98 0.06 0 0  0.06 0.02 1.12 0 0  0 0 0 1 0'],
-  gold: ['#ffbe3b', 4, '1.08 0.1 0.02 0 0.02  0.06 1.02 0.02 0 0.01  0 0 0.82 0 0  0 0 0 1 0'],
-  crown: ['#fff1a8', 5, '1.08 0.06 0 0 0.02  0.04 1.02 0 0 0.01  0 0 0.92 0 0  0 0 0 1 0'],
-  secret: ['#67e8f9', 5, '0.9 0.05 0.1 0 0  0.05 1 0.1 0 0  0.1 0.15 1.15 0 0.02  0 0 0 1 0']
-};
 
 /** Illustrated collectible portrait. Each tier changes outfit, pose, expression, scene and lighting. */
 export function Avatar({ charId, skinId, size = 160, animated = true, locked = false, fluid = false }: { charId: string | null; skinId?: string | null; size?: number; animated?: boolean; locked?: boolean; fluid?: boolean }) {
@@ -21,9 +10,8 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
   const c = charById(charId);
   if (!c) return <EmptyAvatar size={size} />;
   const tier: Tier = skinById(skinId)?.tier ?? (c.id === 'noam-future' ? 'secret' : 'classic');
-  const face = FACES[c.id];
-  const L = face ? { ...c.look, skin: FACE_TONES[c.id] ?? c.look.skin } : c.look;
-  const [fxColor, fxSize, fxMatrix] = FACE_FX[tier];
+  const drawn = !!HEADS[c.id];
+  const L = drawn ? { ...c.look, skin: HEADS[c.id].skin } : c.look;
   const g = (n: string) => `${uid}-${n}`;
   const url = (n: string) => `url(#${g(n)})`;
   const outfit = OUTFIT[tier](L);
@@ -61,10 +49,6 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
           <stop offset=".45" stopColor="#ffbe3b" />
           <stop offset="1" stopColor="#a66a00" />
         </linearGradient>
-        <filter id={g('face')} x="-20%" y="-20%" width="140%" height="140%">
-          {fxMatrix && <feColorMatrix type="matrix" values={fxMatrix} />}
-          <feDropShadow dx="0" dy={tier === 'classic' ? 2 : 0} stdDeviation={fxSize} floodColor={fxColor} floodOpacity={tier === 'classic' ? 0.45 : 0.85} />
-        </filter>
         <radialGradient id={g('rim')} cx="50%" cy="42%" r="78%">
           <stop offset=".62" stopColor={RIM[tier]} stopOpacity="0" />
           <stop offset="1" stopColor={RIM[tier]} stopOpacity=".42" />
@@ -86,22 +70,23 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
 
       {/* shoulders & outfit */}
       <ellipse cx="100" cy="236" rx="70" ry="10" fill="#000" opacity=".35" />
-      <path d="M38 240 L43 180 Q47 151 79 145 L121 145 Q153 151 157 180 L162 240 Z" fill={url('cloth')} stroke={face ? '#120e16' : 'none'} strokeWidth="3" strokeLinejoin="round" />
+      <path d="M38 240 L43 180 Q47 151 79 145 L121 145 Q153 151 157 180 L162 240 Z" fill={url('cloth')} stroke="#1a1118" strokeWidth="3" strokeLinejoin="round" />
       <Outfit tier={tier} L={L} url={url} />
       <Arms tier={tier} c={c} url={url} />
 
       {/* neck & head */}
-      {!face && <path d="M86 122 L86 148 Q100 158 114 148 L114 122 Z" fill={darken(L.skin, 0.18)} />}
-      {face ? (
+      {drawn ? (
         <>
-          {/* Head first: seated by its measured neck point, scaled by face width; the body is built to meet it. */}
-          <path d="M88 124 L88 150 Q100 158 112 150 L112 124 Z" fill={darken(L.skin, 0.12)} stroke="#120e16" strokeWidth="3" strokeLinejoin="round" />
-          <path d="M88 142 Q100 150 112 142" stroke={darken(L.skin, 0.35)} strokeWidth="2" fill="none" />
-          <HeadImage href={face} geo={FACE_GEO[c.id]} filter={`url(#${g('face')})`} />
-          {tier === 'crown' && <Crown url={url} lift={-14} />}
+          {/* Big game-style head, scaled up from the neck so it always sits on the shoulders. */}
+          <g transform={`translate(100 ${HEAD_PIVOT}) scale(${HEAD_SCALE}) translate(-100 -${HEAD_PIVOT})`}>
+            <GameHead id={c.id} expr={EXPR[tier]} g={g} />
+            {L.prop === 'shades' && (tier === 'legendary' || tier === 'gold') && <Shades />}
+          </g>
+          {tier === 'crown' && <Crown url={url} lift={HEAD_PIVOT - (HEAD_PIVOT - headTop(c.id)) * HEAD_SCALE + 14 - 52} />}
         </>
       ) : (
         <>
+          <path d="M86 122 L86 148 Q100 158 114 148 L114 122 Z" fill={darken(L.skin, 0.18)} />
           <ellipse cx="61" cy="96" rx="7" ry="10" fill={darken(L.skin, 0.1)} />
           <ellipse cx="139" cy="96" rx="7" ry="10" fill={darken(L.skin, 0.1)} />
           <ellipse cx="100" cy="92" rx="38" ry="44" fill={url('skin')} />
@@ -120,15 +105,8 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
   );
 }
 
-const NECK_Y = 132;
-const FACE_W = 72;
-
-function HeadImage({ href, geo, filter }: { href: string; geo?: { neckX: number; neckY: number; faceW: number }; filter: string }) {
-  const g = geo ?? { neckX: 0.5, neckY: 0.85, faceW: 0.645 };
-  const w = FACE_W / g.faceW;
-  const h = w * 1.2;
-  return <image href={href} x={100 - g.neckX * w} y={NECK_Y - g.neckY * h} width={w} height={h} preserveAspectRatio="none" filter={filter} />;
-}
+const HEAD_SCALE = 1.1;
+const HEAD_PIVOT = 146;
 
 function EmptyAvatar({ size }: { size: number }) {
   return (
@@ -189,7 +167,7 @@ function Scene({ tier, L, g, url }: { tier: Tier; L: CharacterDef['look']; g: (n
         <rect width="200" height="240" fill={url('brick')} />
         <path d="M30 60 A70 70 0 0 1 170 60" stroke="#ff4dc4" strokeWidth="5" fill="none" strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 6px #ff4dc4)' }} className={g('tw')} />
         <path d="M44 70 A56 56 0 0 1 156 70" stroke={L.accent} strokeWidth="3" fill="none" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${L.accent})` }} />
-        <text x="100" y="34" textAnchor="middle" fontSize="14" fill="#22d3ee" fontFamily="Secular One, sans-serif" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }}>
+        <text x="38" y="22" textAnchor="middle" fontSize="11" fill="#22d3ee" transform="rotate(-8 38 22)" fontFamily="Secular One, sans-serif" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }}>
           OPEN MIC
         </text>
       </g>
@@ -258,7 +236,7 @@ function Scene({ tier, L, g, url }: { tier: Tier; L: CharacterDef['look']; g: (n
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <path key={i} d={`M${100 - (i + 1) * 30} 240 L100 175 L${100 + (i + 1) * 30} 240`} stroke="#67e8f9" strokeOpacity=".25" fill="none" />
         ))}
-        <text x="100" y="26" textAnchor="middle" fontSize="13" fill="#67e8f9" fontFamily="Secular One, sans-serif" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }}>
+        <text x="28" y="24" textAnchor="middle" fontSize="13" fill="#67e8f9" fontFamily="Secular One, sans-serif" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }}>
           2066
         </text>
       </g>
@@ -561,9 +539,9 @@ function Glasses({ gold, url }: { gold: boolean; url: (n: string) => string }) {
 function Shades() {
   return (
     <g>
-      <path d="M68 82 H96 Q96 100 82 100 Q68 100 68 82 Z M104 82 H132 Q132 100 118 100 Q104 100 104 82 Z" fill="#0b0b10" />
-      <path d="M96 85 h8" stroke="#0b0b10" strokeWidth="3" />
-      <path d="M74 86 l6 6 M110 86 l6 6" stroke="#ffffff55" strokeWidth="2" />
+      <path d="M70 84 H97 Q97 102 83 102 Q70 102 70 84 Z M103 84 H130 Q130 102 117 102 Q103 102 103 84 Z" fill="#0b0b10" stroke="#1a1118" strokeWidth="2" />
+      <path d="M96 87 h8 M70 86 L58 84 M130 86 L142 84" stroke="#0b0b10" strokeWidth="3" />
+      <path d="M76 88 l6 6 M109 88 l6 6" stroke="#ffffff55" strokeWidth="2" />
     </g>
   );
 }

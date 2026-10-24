@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Confetti, Screen, TopBar } from '../components/ui';
-import { FACES } from '../generated/faces';
+import { GameHead } from '../components/heads';
 import { SECRET_CHARACTER, SECRET_SKIN } from '../lib/characters';
 import { equip, unlockSecret } from '../lib/economy';
 import { newSeed } from '../lib/rng';
@@ -91,6 +91,7 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const game = useRef<TMState | null>(null);
+  const headSvg = useRef<SVGSVGElement>(null);
   const [hud, setHud] = useState({ year: 2026, lives: 3, era: 0, clocks: 0, status: 'ready' as TMState['status'] });
   const won = useRef(false);
   const winRef = useRef(onWin);
@@ -101,7 +102,8 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
     const box = wrap.current!;
     const ctx = el.getContext('2d')!;
     const face = new Image();
-    face.src = FACES['noam'] ?? '';
+    // The pilot is the drawn Noam head, rasterised from the hidden SVG below.
+    if (headSvg.current) face.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(headSvg.current));
     let raf = 0;
     let last = performance.now();
     let size = { w: 0, h: 0 };
@@ -295,6 +297,9 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-ink-950 pt-[env(safe-area-inset-top,0px)]">
+      <svg ref={headSvg} xmlns="http://www.w3.org/2000/svg" viewBox="40 14 120 144" width="240" height="288" className="hidden" aria-hidden>
+        <GameHead id="noam" expr="grin" g={(n) => 'tm-' + n} />
+      </svg>
       <div className="flex items-center gap-3 px-4 py-2">
         <button className="btn-ghost min-h-[44px] px-3 text-base" onClick={onExit}>
           → יציאה

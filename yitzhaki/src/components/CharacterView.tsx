@@ -19,7 +19,10 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
   const skinOwned = owned && (sel.tier === 'classic' || p.skins.includes(sel.id));
   const buyTarget = owned ? sel.id : charId;
   const err = canBuy(p, buyTarget);
+  // Price of what the buy button buys (the character first, then skins).
   const price = owned ? sel.price : c.price;
+  // Price of the skin being looked at; the classic skin comes with the character.
+  const skinPrice = (s: SkinDef) => (s.tier === 'classic' ? c.price : s.price);
   const equipped = p.equipped.skin === sel.id;
 
   const doBuy = () => {
@@ -70,13 +73,18 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
                 role="tab"
                 aria-selected={sel.id === s.id}
                 onClick={() => (sfx.tap(), setSel(s))}
-                className={`relative w-[60px] shrink-0 overflow-hidden rounded-xl border-2 transition ${sel.id === s.id ? 'scale-105' : 'opacity-70'}`}
-                style={{ borderColor: sel.id === s.id ? TIER_META[s.tier].color : '#29252f' }}
+                className={`flex w-[64px] shrink-0 flex-col items-center gap-1 transition ${sel.id === s.id ? 'scale-105' : 'opacity-75'}`}
                 title={`${s.name} · ${TIER_META[s.tier].label}`}
-                aria-label={`סקין ${TIER_META[s.tier].label}: ${s.name}${have ? '' : ' (נעול)'}`}
+                aria-label={`סקין ${TIER_META[s.tier].label}: ${s.name}${have ? '' : ` — ${fmt(skinPrice(s))} מטבעות`}`}
               >
-                <Avatar charId={charId} skinId={s.id} size={56} animated={false} />
-                {!have && <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-ink-200">🔒</span>}
+                <span className="relative block w-full overflow-hidden rounded-xl border-2" style={{ borderColor: sel.id === s.id ? TIER_META[s.tier].color : '#29252f' }}>
+                  <Avatar charId={charId} skinId={s.id} size={60} animated={false} />
+                  {!have && <span className="absolute inset-x-0 bottom-0 bg-black/70 text-center text-[10px] text-ink-200">🔒</span>}
+                </span>
+                <span className="text-[11px] font-bold leading-none" style={{ color: TIER_META[s.tier].color }}>
+                  {TIER_META[s.tier].label}
+                </span>
+                <span className="text-[11px] tabular-nums leading-none text-ink-200">{have ? '✓' : fmt(skinPrice(s))}</span>
               </button>
             );
           })}
@@ -87,7 +95,7 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
             <span className="font-bold" style={{ color: meta.color }}>
               {meta.label}
             </span>
-            {skinOwned ? <span className="text-sm text-ink-400">באוסף שלך</span> : <Price value={price} dim={err === 'coins'} />}
+            {skinOwned ? <span className="text-sm text-ink-400">באוסף שלך</span> : <Price value={skinPrice(sel)} dim={err === 'coins'} />}
           </div>
           {skinOwned ? (
             <button
@@ -104,6 +112,12 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
             <p className="text-center text-sm text-ink-400">כדי לקנות סקין צריך קודם את {c.name}.</p>
           ) : (
             <>
+              {!owned && sel.tier !== 'classic' && (
+                <p className="text-center text-sm text-ink-400">
+                  קודם קונים את {c.name} ב־{fmt(c.price)} מטבעות, ואז אפשר לקנות את הסקין הזה.
+                </p>
+              )}
+            <>
               <button className="btn-amber w-full text-xl" disabled={!!err} onClick={() => setConfirm(buyTarget)}>
                 {owned ? 'לקנות סקין' : `לקנות את ${c.name}`}
               </button>
@@ -118,6 +132,7 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
                   </button>
                 </>
               )}
+            </>
             </>
           )}
           {owned && (

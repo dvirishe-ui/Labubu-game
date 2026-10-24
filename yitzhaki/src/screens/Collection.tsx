@@ -90,6 +90,20 @@ export default function Collection({ onBack, onShop }: { onBack: () => void; onS
           </button>
         </section>
       )}
+      {!hasSecret && (
+        <section className="mb-5">
+          <span className="label">סודי</span>
+          <div className="card flex items-center gap-3 border-dashed border-cyan-400/40 p-3">
+            <span className="grid h-16 w-14 shrink-0 place-items-center rounded-xl bg-ink-950 font-display text-3xl text-cyan-300" aria-hidden>
+              ?
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-display text-xl text-white">דמות מסתורית</span>
+              <span className="text-sm text-ink-400">אי אפשר לקנות אותה. רמז: הלוגו בדף הבית שווה כמה הקשות מהירות…</span>
+            </span>
+          </div>
+        </section>
+      )}
 
       {owned.length > 0 && (
         <section className="mb-5">

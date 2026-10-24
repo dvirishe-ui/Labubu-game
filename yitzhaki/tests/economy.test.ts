@@ -22,10 +22,17 @@ describe('roster', () => {
       expect(s[1].price).toBeGreaterThan(c.price);
       expect(s[2].price).toBeGreaterThan(s[1].price);
       expect(s[3].price).toBeGreaterThan(s[2].price);
+      // Markups on top of the character's price.
+      expect(s[1].price - c.price).toBeGreaterThanOrEqual(2500);
+      expect(s[1].price - c.price).toBeLessThanOrEqual(4000);
+      expect(s[2].price - c.price).toBeGreaterThanOrEqual(7500);
+      expect(s[2].price - c.price).toBeLessThanOrEqual(12000);
+      expect(s[3].price - c.price).toBe(25000);
     }
     const prices = [...CHARACTERS.map((c) => c.price), ...CHARACTERS.flatMap((c) => skinsFor(c.id).filter((x) => x.price > 0).map((x) => x.price))];
     expect(new Set(prices).size).toBe(prices.length);
-    expect(skinsFor('assaf').at(-1)).toMatchObject({ id: CROWN_SKIN.id, price: 40000 });
+    expect(skinsFor('assaf').at(-1)).toMatchObject({ id: CROWN_SKIN.id, price: 60000 });
+    expect(CROWN_SKIN.price).toBeGreaterThan(Math.max(...skinsFor('assaf').filter((x) => x.tier !== 'crown').map((x) => x.price)));
     expect(skinsFor('tzach').some((s) => s.tier === 'crown')).toBe(false);
   });
 });
