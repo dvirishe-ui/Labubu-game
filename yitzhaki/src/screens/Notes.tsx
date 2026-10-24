@@ -32,6 +32,8 @@ function NotesSetup({ onBack, onStart }: { onBack: () => void; onStart: (s: Note
   const [word, setWord] = useState('');
   const [seconds, setSeconds] = useState(45);
   const [penalty, setPenalty] = useState(false);
+  const [perTurn, setPerTurn] = useState<number | null>(null);
+  const [gameSize, setGameSize] = useState<number | null>(null);
   const [rules, setRules] = useState(false);
   const add = () => {
     const w = word.trim();
@@ -105,6 +107,23 @@ function NotesSetup({ onBack, onStart }: { onBack: () => void; onStart: (s: Note
           </button>
         ))}
       </div>
+      <span className="label">כמה פתקים לתור</span>
+      <div className="mb-4 grid grid-cols-4 gap-2" role="group" aria-label="כמה פתקים לתור">
+        {[null, 3, 5, 8].map((n) => (
+          <button key={String(n)} aria-pressed={perTurn === n} onClick={() => setPerTurn(n)} className={`min-h-[52px] rounded-2xl font-bold ${perTurn === n ? 'bg-amber-400 text-ink-950' : 'bg-ink-800'}`}>
+            {n ?? 'בלי הגבלה'}
+          </button>
+        ))}
+      </div>
+      <span className="label">כמה פתקים במשחק</span>
+      <div className="mb-1 grid grid-cols-4 gap-2" role="group" aria-label="כמה פתקים במשחק">
+        {[null, 15, 25, 35].map((n) => (
+          <button key={String(n)} aria-pressed={gameSize === n} onClick={() => setGameSize(n)} className={`min-h-[52px] rounded-2xl font-bold ${gameSize === n ? 'bg-amber-400 text-ink-950' : 'bg-ink-800'}`}>
+            {n ?? 'כולם'}
+          </button>
+        ))}
+      </div>
+      <p className="mb-4 text-xs text-ink-400">{gameSize && slips.length > gameSize ? `יוגרלו ${gameSize} מתוך ${slips.length} הפתקים.` : 'משחקים עם כל הפתקים שהוספתם.'}</p>
       <label className="mb-8 flex min-h-[48px] items-center justify-between">
         <span>דילוג עולה נקודה</span>
         <input type="checkbox" className="h-6 w-6 accent-amber-400" checked={penalty} onChange={(e) => setPenalty(e.target.checked)} />
@@ -113,7 +132,11 @@ function NotesSetup({ onBack, onStart }: { onBack: () => void; onStart: (s: Note
       <button
         className="btn-amber w-full text-2xl"
         disabled={slips.length < 5 || teams.some((t) => !t.trim())}
-        onClick={() => onStart(createNotes(slips, teams.map((t) => t.trim()), seconds, penalty, newSeed()))}
+        onClick={() => {
+          const seed = newSeed();
+          const chosen = gameSize && slips.length > gameSize ? shuffle(slips, seed + ':pick').slice(0, gameSize) : slips;
+          onStart(createNotes(chosen, teams.map((t) => t.trim()), seconds, penalty, seed, perTurn));
+        }}
       >
         {slips.length < 5 ? `צריך לפחות 5 פתקים` : 'מתחילים'}
       </button>
@@ -132,7 +155,7 @@ function RulesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <b>{r.title}:</b> {r.rule}
           </li>
         ))}
-        <li>בכל תור: נציג אחד מסביר לקבוצה שלו כמה שיותר פתקים עד שנגמר הזמן. ✓ = נקודה.</li>
+        <li>בכל תור: נציג אחד מסביר לקבוצה שלו כמה שיותר פתקים עד שנגמר הזמן — או עד שמגיעים למספר הפתקים לתור, אם הגדרתם. ✓ = נקודה.</li>
       </ol>
     </Modal>
   );
@@ -176,7 +199,7 @@ function NotesGame({ state, setState, onBack }: { state: NotesState; setState: (
             </tbody>
           </table>
         </div>
-        <button className="btn-amber mt-6 w-full" onClick={() => setState(createNotes(state.slips, state.teams.map((t) => t.name), state.seconds, state.skipPenalty, newSeed()))}>
+        <button className="btn-amber mt-6 w-full" onClick={() => setState(createNotes(state.slips, state.teams.map((t) => t.name), state.seconds, state.skipPenalty, newSeed(), state.perTurn ?? null))}>
           משחק חוזר עם אותם פתקים
         </button>
         <button className="btn-ghost mt-3 w-full" onClick={() => setState(null)}>
@@ -196,10 +219,16 @@ function NotesGame({ state, setState, onBack }: { state: NotesState; setState: (
           </span>
         ))}
         <span className="chip text-ink-400">נשארו {state.remaining.length}</span>
+        {state.perTurn && running && (
+          <span className="chip border-amber-400/60 text-amber-300">
+            בתור: {state.turnGuessed ?? 0}/{state.perTurn}
+          </span>
+        )}
       </div>
 
       {!running ? (
         <div className="card flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center animate-pop">
+          {state.limitHit && <p className="chip border-amber-400 text-amber-300">הגעתם למקסימום הפתקים לתור 🎯</p>}
           <p className="text-ink-400">התור של</p>
           <p className="font-display text-5xl text-amber-400">{team.name}</p>
           <p className="max-w-xs">{r.rule}</p>
@@ -246,7 +275,7 @@ function NotesGame({ state, setState, onBack }: { state: NotesState; setState: (
               onClick={() => {
                 sfx.good();
                 const next = guessed(state);
-                if (next.round !== state.round || next.finished) setRunning(false);
+                if (next.round !== state.round || next.finished || next.turnCount !== state.turnCount) setRunning(false);
                 setState(next);
               }}
             >

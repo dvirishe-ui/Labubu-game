@@ -93,6 +93,28 @@ describe('editor review list', () => {
   });
 });
 
+describe('slip limits', () => {
+  it('passes the turn after the per-turn limit, keeping the round going', () => {
+    let s = startTurn(createNotes(['א', 'ב', 'ג', 'ד', 'ה', 'ו'], ['x', 'y'], 45, false, 'seed', 2));
+    s = guessed(s);
+    expect(s.turnTeam).toBe(0);
+    s = guessed(s);
+    expect(s.turnTeam).toBe(1);
+    expect(s.limitHit).toBe(true);
+    expect(s.round).toBe(0);
+    expect(s.remaining.length).toBe(4);
+    expect(totals(s)).toEqual([2, 0]);
+    s = guessed(startTurn(s));
+    expect(s.turnGuessed).toBe(1);
+    expect(s.limitHit).toBe(false);
+  });
+  it('without a limit a team keeps going until time runs out', () => {
+    let s = startTurn(createNotes(['א', 'ב', 'ג', 'ד', 'ה', 'ו'], ['x', 'y'], 45, false, 'seed'));
+    for (let i = 0; i < 5; i++) s = guessed(s);
+    expect(s.turnTeam).toBe(0);
+  });
+});
+
 describe('roof slip packs', () => {
   it('builds the panel, segments and roof packs without duplicates', () => {
     const packs = slipPacks(['אסף יצחקי', 'יונתן ברק'], resolveDeck().games.map((g) => g.title));

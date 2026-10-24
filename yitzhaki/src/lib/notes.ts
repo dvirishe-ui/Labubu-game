@@ -24,9 +24,15 @@ export interface NotesState {
   seed: string;
   turnCount: number;
   finished: boolean;
+  /** Most slips a team may get in one turn (null = until time runs out). */
+  perTurn?: number | null;
+  /** Slips guessed so far this turn. */
+  turnGuessed?: number;
+  /** Set when the last turn ended by hitting the per-turn limit. */
+  limitHit?: boolean;
 }
 
-export function createNotes(slips: string[], teamNames: string[], seconds: number, skipPenalty: boolean, seed: string): NotesState {
+export function createNotes(slips: string[], teamNames: string[], seconds: number, skipPenalty: boolean, seed: string, perTurn: number | null = null): NotesState {
   const clean = [...new Set(slips.map((s) => s.trim()).filter(Boolean))];
   const remaining = shuffle(clean, seed + ':0');
   return {
@@ -40,7 +46,9 @@ export function createNotes(slips: string[], teamNames: string[], seconds: numbe
     seconds,
     seed,
     turnCount: 0,
-    finished: clean.length === 0
+    finished: clean.length === 0,
+    perTurn,
+    turnGuessed: 0
   };
 }
 
@@ -57,8 +65,11 @@ export function guessed(s: NotesState): NotesState {
   if (!s.current || s.finished) return s;
   const remaining = s.remaining.slice(1);
   const teams = withScore(s, 1);
-  if (remaining.length) return { ...s, teams, remaining, current: remaining[0] };
-  return endRound({ ...s, teams, remaining });
+  const turnGuessed = (s.turnGuessed ?? 0) + 1;
+  if (!remaining.length) return endRound({ ...s, teams, remaining });
+  // Reached the per-turn limit: the turn passes even if time is left.
+  if (s.perTurn && turnGuessed >= s.perTurn) return { ...passTurn({ ...s, teams, remaining }), limitHit: true };
+  return { ...s, teams, remaining, current: remaining[0], turnGuessed };
 }
 
 /** Skipped slip goes to the back of the pile; optional -1. */
@@ -74,18 +85,22 @@ function endRound(s: NotesState): NotesState {
   const round = (s.round + 1) as 0 | 1 | 2;
   const remaining = shuffle(s.slips, `${s.seed}:${round}`);
   // Emptying the pile ends the turn; the next round opens with the next team.
-  return { ...s, round, remaining, current: null, turnTeam: (s.turnTeam + 1) % s.teams.length, turnCount: s.turnCount + 1 };
+  return { ...s, round, remaining, current: null, turnTeam: (s.turnTeam + 1) % s.teams.length, turnCount: s.turnCount + 1, turnGuessed: 0, limitHit: false };
+}
+
+function passTurn(s: NotesState): NotesState {
+  const remaining = shuffle(s.remaining, `${s.seed}:t${s.turnCount}`);
+  return { ...s, remaining, current: null, turnTeam: (s.turnTeam + 1) % s.teams.length, turnCount: s.turnCount + 1, turnGuessed: 0, limitHit: false };
 }
 
 /** Timer ran out: pass to the next team, slip order reshuffled so the same hard slip isn't always first. */
 export function timeUp(s: NotesState): NotesState {
   if (s.finished) return s;
-  const remaining = shuffle(s.remaining, `${s.seed}:t${s.turnCount}`);
-  return { ...s, remaining, current: null, turnTeam: (s.turnTeam + 1) % s.teams.length, turnCount: s.turnCount + 1 };
+  return passTurn(s);
 }
 
 export function startTurn(s: NotesState): NotesState {
-  return { ...s, current: s.remaining[0] ?? null };
+  return { ...s, current: s.remaining[0] ?? null, turnGuessed: 0, limitHit: false };
 }
 
 export function totals(s: NotesState): number[] {
