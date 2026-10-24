@@ -127,7 +127,7 @@ const deck = {
   games: games.map((g) => ({ id: g.id, title: g.hebrew_title, subtitle: g.subtitle, engine: g.kind, emoji: g.emoji, options: g.options, mature: !!defs[g.id].mature, count: g.question_count, unresolved: g.unresolved_count })),
   rounds: rounds.map((r) => ({
     id: r.id, g: r.game_id, p: r.display_prompt, o: r.option_labels ? null : r.options, m: r.content_rating === 'mature',
-    u: r.usable, c: r.confidence,
+    u: r.usable, c: r.confidence, r: r.unusable_reason ? r.unusable_reason.split(':')[0].replace(/^duplicate_of.*/, 'duplicate') : null, st: r.source_status,
     x: seal(r.id, { a: r.correct_answer, rv: r.host_final_reveal_excerpt, gs: r.guessed_answers, pn: r.panel_reactions, fee: r.extra.fee, ar: r.extra.artist, rn: r.reveal_note })
   }))
 };

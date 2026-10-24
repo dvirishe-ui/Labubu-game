@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import { FACE_TONES, FACES } from '../generated/faces';
+import { FACE_GEO, FACE_TONES, FACES } from '../generated/faces';
 import { charById, skinById, type CharacterDef, type Tier } from '../lib/characters';
 
 type Expr = 'smile' | 'grin' | 'laugh' | 'wink' | 'smirk';
@@ -86,7 +86,7 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
 
       {/* shoulders & outfit */}
       <ellipse cx="100" cy="236" rx="70" ry="10" fill="#000" opacity=".35" />
-      <path d="M38 240 L43 180 Q47 151 79 145 L121 145 Q153 151 157 180 L162 240 Z" fill={url('cloth')} />
+      <path d="M38 240 L43 180 Q47 151 79 145 L121 145 Q153 151 157 180 L162 240 Z" fill={url('cloth')} stroke={face ? '#120e16' : 'none'} strokeWidth="3" strokeLinejoin="round" />
       <Outfit tier={tier} L={L} url={url} />
       <Arms tier={tier} c={c} url={url} />
 
@@ -94,7 +94,10 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
       {!face && <path d="M86 122 L86 148 Q100 158 114 148 L114 122 Z" fill={darken(L.skin, 0.18)} />}
       {face ? (
         <>
-          <image href={face} x="40" y="16" width="120" height="144" preserveAspectRatio="xMidYMid meet" filter={`url(#${g('face')})`} />
+          {/* Head first: seated by its measured neck point, scaled by face width; the body is built to meet it. */}
+          <path d="M88 124 L88 150 Q100 158 112 150 L112 124 Z" fill={darken(L.skin, 0.12)} stroke="#120e16" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M88 142 Q100 150 112 142" stroke={darken(L.skin, 0.35)} strokeWidth="2" fill="none" />
+          <HeadImage href={face} geo={FACE_GEO[c.id]} filter={`url(#${g('face')})`} />
           {tier === 'crown' && <Crown url={url} lift={-14} />}
         </>
       ) : (
@@ -115,6 +118,16 @@ export function Avatar({ charId, skinId, size = 160, animated = true, locked = f
       {tier !== 'classic' && <Sparkles tier={tier} g={g} />}
     </svg>
   );
+}
+
+const NECK_Y = 132;
+const FACE_W = 72;
+
+function HeadImage({ href, geo, filter }: { href: string; geo?: { neckX: number; neckY: number; faceW: number }; filter: string }) {
+  const g = geo ?? { neckX: 0.5, neckY: 0.85, faceW: 0.645 };
+  const w = FACE_W / g.faceW;
+  const h = w * 1.2;
+  return <image href={href} x={100 - g.neckX * w} y={NECK_Y - g.neckY * h} width={w} height={h} preserveAspectRatio="none" filter={filter} />;
 }
 
 function EmptyAvatar({ size }: { size: number }) {

@@ -10,23 +10,20 @@ const game = (id: string, over = {}) => ({ sessionId: id, answered: 10, duration
 describe('roster', () => {
   it('has exactly the eight approved characters with Assaf most expensive', () => {
     expect(CHARACTERS.map((c) => c.name)).toEqual(['אסף יצחקי', 'יונתן ברק', 'חן מזרחי', 'מתן פרץ', 'נועם אונגר', 'דור יתח', 'טל ראשון', 'צח רוקח']);
-    expect(CHARACTERS.map((c) => c.price)).toEqual([20000, 12000, 10000, 10000, 9000, 7000, 7000, 5000]);
+    expect(CHARACTERS.map((c) => c.price)).toEqual([20000, 12500, 10500, 10000, 9000, 7500, 7000, 5000]);
     const max = Math.max(...CHARACTERS.map((c) => c.price));
     expect(CHARACTERS.find((c) => c.price === max)!.id).toBe('assaf');
   });
-  it('every character has four tiers in the requested price bands; Assaf has the crown', () => {
+  it('every character has four tiers, each pricier than the last, and no two prices repeat', () => {
     for (const c of CHARACTERS) {
       const s = skinsFor(c.id);
       expect(s.map((x) => x.tier).slice(0, 4)).toEqual(['classic', 'special', 'legendary', 'gold']);
       expect(s[0].price).toBe(0);
-      expect(s[1].price).toBeGreaterThanOrEqual(2500);
-      expect(s[1].price).toBeLessThanOrEqual(4000);
-      expect(s[2].price).toBeGreaterThanOrEqual(7500);
-      expect(s[2].price).toBeLessThanOrEqual(12000);
-      expect(s[3].price).toBeGreaterThanOrEqual(23000);
-      expect(s[3].price).toBeLessThanOrEqual(28000);
+      expect(s[1].price).toBeGreaterThan(c.price);
+      expect(s[2].price).toBeGreaterThan(s[1].price);
+      expect(s[3].price).toBeGreaterThan(s[2].price);
     }
-    const prices = CHARACTERS.flatMap((c) => skinsFor(c.id).filter((x) => x.price > 0).map((x) => x.price));
+    const prices = [...CHARACTERS.map((c) => c.price), ...CHARACTERS.flatMap((c) => skinsFor(c.id).filter((x) => x.price > 0).map((x) => x.price))];
     expect(new Set(prices).size).toBe(prices.length);
     expect(skinsFor('assaf').at(-1)).toMatchObject({ id: CROWN_SKIN.id, price: 40000 });
     expect(skinsFor('tzach').some((s) => s.tier === 'crown')).toBe(false);

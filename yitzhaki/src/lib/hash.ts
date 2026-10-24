@@ -47,3 +47,6 @@ export function sha256(text: string): string {
 /** Editor password check. Only the hash ships; this keeps players out of spoilers, it is not a security boundary. */
 const EDITOR_HASH = 'ecd1c755ac4de7dc38f3c1d2034cd1e24bf6c672060efe50405955352a28afcf';
 export const checkEditorPassword = (pw: string) => sha256('gag-editor:' + pw.trim()) === EDITOR_HASH;
+
+/** Key the self-hosted server checks before accepting shared editor changes. */
+export const serverKey = (pw: string) => sha256('gag-server:' + pw.trim());

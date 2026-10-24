@@ -3,7 +3,7 @@ import { NameSheet } from './components/Profile';
 import { Toasts } from './components/Toasts';
 import { Modal } from './components/ui';
 import { parseDuelHash } from './lib/challenges';
-import { loadOverrides, resolveDeck, type AdminOverrides } from './lib/deck';
+import { loadOverrides, resolveDeck, saveOverrides, type AdminOverrides } from './lib/deck';
 import { bumpStats, finishGame, finishPartyNight, type RewardEvent } from './lib/economy';
 import { partyAvailable } from './lib/party';
 import { buildRecap } from './lib/recap';
@@ -74,7 +74,23 @@ export default function App() {
 
   useEffect(() => {
     partyAvailable().then(setParty);
-    profileStore.init().then(() => setWelcome(!profileStore.get().profile.name));
+    profileStore.init().then(() => {
+      setWelcome(!profileStore.get().profile.name);
+      // The editor's fixes are shared: pick up a newer copy than the one on this device.
+      profileStore
+        .get()
+        .cloud?.loadEditor()
+        .then((shared) => {
+          if (!shared) return;
+          setOverrides((cur) => {
+            if ((shared.updatedAt ?? 0) <= (cur.updatedAt ?? 0)) return cur;
+            const next = { ...cur, ...shared };
+            saveOverrides(next);
+            return next;
+          });
+        })
+        .catch(() => {});
+    });
   }, []);
   useEffect(() => {
     save('mature', mature);

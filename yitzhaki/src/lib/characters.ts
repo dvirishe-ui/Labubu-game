@@ -1,4 +1,6 @@
 // The shop roster is fixed at these eight panelists. Adding anyone needs explicit approval.
+// Prices: every character and every skin costs something different, and each skin tier costs
+// more than the one below it (the classic skin comes with the character).
 export type Tier = 'classic' | 'special' | 'legendary' | 'gold' | 'crown' | 'secret';
 
 export interface CharacterDef {
@@ -27,23 +29,23 @@ export const CHARACTERS: CharacterDef[] = [
     price: 20000,
     rarity: 'מיתי',
     look: { skin: '#e8b48f', hair: 'swoop', hairColor: '#2a1d16', beard: 'stubble', glasses: false, accent: '#ffbe3b', accent2: '#e0243f', prop: 'mic' },
-    skinPrices: { special: 4000, legendary: 12000, gold: 28000 }
+    skinPrices: { special: 22000, legendary: 26500, gold: 32000 }
   },
   {
     id: 'yonatan',
     name: 'יונתן ברק',
-    price: 12000,
+    price: 12500,
     rarity: 'אגדי',
     look: { skin: '#d9a07a', hair: 'curly', hairColor: '#1d1410', beard: 'full', glasses: false, accent: '#8b5cf6', accent2: '#22d3ee', prop: 'headphones' },
-    skinPrices: { special: 3800, legendary: 11000, gold: 27000 }
+    skinPrices: { special: 14500, legendary: 18000, gold: 30000 }
   },
   {
     id: 'chen',
     name: 'חן מזרחי',
-    price: 10000,
+    price: 10500,
     rarity: 'אפי',
     look: { skin: '#c98d66', hair: 'buzz', hairColor: '#1a1310', beard: 'goatee', glasses: false, accent: '#10b981', accent2: '#ffbe3b', prop: 'chain' },
-    skinPrices: { special: 3500, legendary: 10000, gold: 26000 }
+    skinPrices: { special: 12000, legendary: 16000, gold: 29000 }
   },
   {
     id: 'matan',
@@ -51,7 +53,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 10000,
     rarity: 'אפי',
     look: { skin: '#e2a982', hair: 'wavy', hairColor: '#3b2a1e', beard: 'stubble', glasses: true, accent: '#3b82f6', accent2: '#f472b6', prop: 'notebook' },
-    skinPrices: { special: 3300, legendary: 9500, gold: 25500 }
+    skinPrices: { special: 11500, legendary: 15500, gold: 28000 }
   },
   {
     id: 'noam',
@@ -59,15 +61,15 @@ export const CHARACTERS: CharacterDef[] = [
     price: 9000,
     rarity: 'אפי',
     look: { skin: '#edc19c', hair: 'spiky', hairColor: '#4a3426', beard: 'none', glasses: false, accent: '#f97316', accent2: '#a3e635', prop: 'phone' },
-    skinPrices: { special: 3100, legendary: 9000, gold: 25000 }
+    skinPrices: { special: 9800, legendary: 14000, gold: 27000 }
   },
   {
     id: 'dor',
     name: 'דור יתח',
-    price: 7000,
+    price: 7500,
     rarity: 'נדיר',
     look: { skin: '#b97f5a', hair: 'cap', hairColor: '#120d0a', beard: 'mustache', glasses: false, accent: '#ef4444', accent2: '#fbbf24', prop: 'sneaker' },
-    skinPrices: { special: 2900, legendary: 8500, gold: 24000 }
+    skinPrices: { special: 8500, legendary: 13000, gold: 26000 }
   },
   {
     id: 'tal',
@@ -75,7 +77,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 7000,
     rarity: 'נדיר',
     look: { skin: '#f0c7a6', hair: 'bun', hairColor: '#5b3a24', beard: 'full', glasses: true, accent: '#06b6d4', accent2: '#f43f5e', prop: 'coffee' },
-    skinPrices: { special: 2700, legendary: 8000, gold: 23500 }
+    skinPrices: { special: 8000, legendary: 12200, gold: 25000 }
   },
   {
     id: 'tzach',
@@ -83,7 +85,7 @@ export const CHARACTERS: CharacterDef[] = [
     price: 5000,
     rarity: 'נדיר',
     look: { skin: '#d6a07c', hair: 'beanie', hairColor: '#2b1f17', beard: 'stubble', glasses: false, accent: '#eab308', accent2: '#6366f1', prop: 'shades' },
-    skinPrices: { special: 2500, legendary: 7500, gold: 23000 }
+    skinPrices: { special: 6000, legendary: 9500, gold: 24000 }
   }
 ];
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findDuplicates, importRounds, parseCsv, similarity } from '../src/lib/admin';
-import { resolveDeck } from '../src/lib/deck';
+import { resolveDeck, reviewFlags } from '../src/lib/deck';
 import { createNotes, guessed, skipped, startTurn, timeUp, totals } from '../src/lib/notes';
 
 describe('פתקים על הגג', () => {
@@ -73,5 +73,22 @@ describe('editor tools', () => {
       { id: '3', gameId: 'g', prompt: 'משהו אחר לגמרי' }
     ]);
     expect(d.map(([a, b]) => a + b)).toEqual(['12']);
+  });
+});
+
+describe('editor review list', () => {
+  const base = resolveDeck().rounds.find((r) => r.usable)!;
+  it('flags rounds that need a human look', () => {
+    expect(reviewFlags({ ...base, prompt: 'שאלה ארוכה מספיק וברורה לגמרי' })).toEqual([]);
+    expect(reviewFlags({ ...base, prompt: 'מישהו גר ב[שם רחוב] כבר שנים' })).toContain('placeholder');
+    expect(reviewFlags({ ...base, prompt: 'ואז הוא אמר שהוא…' })).toContain('cut-off');
+    expect(reviewFlags({ ...base, prompt: 'קצר' })).toContain('too-short');
+    expect(reviewFlags({ ...base, usable: false, prompt: 'שאלה ארוכה מספיק וברורה לגמרי' })).toEqual(['not-playable']);
+    expect(reviewFlags({ ...base, sourceStatus: 'ambiguous_autocaption', prompt: 'שאלה ארוכה מספיק וברורה לגמרי' })).toContain('unclear-captions');
+  });
+  it('edited text and review marks flow through the deck', () => {
+    const o = { custom: [], rules: {}, edits: { [base.id]: { p: 'נוסח חדש וברור לשאלה', reviewed: true } } };
+    const r = resolveDeck(o as never).rounds.find((x) => x.id === base.id)!;
+    expect(r.prompt).toBe('נוסח חדש וברור לשאלה');
   });
 });

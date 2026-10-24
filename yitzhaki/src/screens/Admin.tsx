@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ConfirmButton, copyText, Screen, TopBar } from '../components/ui';
-import { findDuplicates, importRounds } from '../lib/admin';
-import { resolveDeck, saveOverrides, openSecret, type AdminOverrides, type CustomRound } from '../lib/deck';
-import { checkEditorPassword } from '../lib/hash';
+import { findDuplicates, importRounds, normalize } from '../lib/admin';
+import { FLAG_LABELS, REASON_LABELS, resolveDeck, reviewFlags, saveOverrides, openSecret, type AdminOverrides, type CustomRound, type ReviewFlag } from '../lib/deck';
+import { checkEditorPassword, serverKey } from '../lib/hash';
+import { profileStore } from '../lib/store';
 import { unseal } from '../lib/obfuscate';
 import { load, save } from '../lib/storage';
 import type { GameMeta, Round } from '../lib/types';
 
-type Tab = 'overview' | 'rounds' | 'import' | 'dupes' | 'rules';
+type Tab = 'review' | 'rounds' | 'overview' | 'import' | 'dupes' | 'rules';
+type Sync = 'idle' | 'saving' | 'shared' | 'local';
 
 interface Evidence {
   src: string;
@@ -28,12 +30,20 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
   const [ok, setOk] = useState(() => load<boolean>('editor.unlocked', false));
   const [pw, setPw] = useState('');
   const [wrong, setWrong] = useState(false);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>('review');
+  const [sync, setSync] = useState<Sync>('idle');
   const { games, rounds } = useMemo(() => resolveDeck(overrides), [overrides]);
   const update = (o: AdminOverrides) => {
-    saveOverrides(o);
-    onChange(o);
+    const next = { ...o, updatedAt: Date.now() };
+    saveOverrides(next);
+    onChange(next);
+    // Share the change with every player (works for the page's owner / with the server's editor key).
+    const cloud = profileStore.get().cloud;
+    if (!cloud) return setSync('local');
+    setSync('saving');
+    cloud.saveEditor(next, load<string>('editor.key', '')).then((ok) => setSync(ok ? 'shared' : 'local'));
   };
+  const reviewCount = rounds.filter((r) => reviewFlags(r).length && !overrides.edits[r.id]?.reviewed).length;
 
   if (!ok)
     return (
@@ -49,6 +59,7 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
               e.preventDefault();
               if (checkEditorPassword(pw)) {
                 save('editor.unlocked', true);
+                save('editor.key', serverKey(pw));
                 setOk(true);
               } else {
                 setWrong(true);
@@ -90,6 +101,8 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
         onBack={onBack}
         title="מצב עורך"
         right={
+          <>
+          <SyncChip sync={sync} />
           <button
             className="btn-ghost min-h-[44px] px-3 text-base"
             onClick={() => {
@@ -99,13 +112,15 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
           >
             נעילה
           </button>
+          </>
         }
       />
       <nav className="mb-4 flex gap-1 overflow-x-auto rounded-2xl bg-ink-800 p-1" role="tablist">
         {(
           [
+            ['review', `לבדיקה (${reviewCount})`],
+            ['rounds', 'כל השאלות'],
             ['overview', 'סקירה'],
-            ['rounds', 'שאלות'],
             ['import', 'ייבוא'],
             ['dupes', 'כפילויות'],
             ['rules', 'חוקים']
@@ -117,7 +132,8 @@ export default function Admin({ overrides, onChange, onBack }: { overrides: Admi
         ))}
       </nav>
       {tab === 'overview' && <Overview games={games} rounds={rounds} overrides={overrides} onReset={() => update({ edits: {}, custom: [], rules: {} })} onLoad={update} />}
-      {tab === 'rounds' && <Rounds games={games} rounds={rounds} overrides={overrides} update={update} />}
+      {tab === 'review' && <Questions mode="review" games={games} rounds={rounds} overrides={overrides} update={update} />}
+      {tab === 'rounds' && <Questions mode="all" games={games} rounds={rounds} overrides={overrides} update={update} />}
       {tab === 'import' && <Import games={games} overrides={overrides} update={update} />}
       {tab === 'dupes' && <Dupes rounds={rounds} overrides={overrides} update={update} />}
       {tab === 'rules' && <Rules games={games} overrides={overrides} update={update} />}
@@ -203,50 +219,136 @@ function Overview({ games, rounds, overrides, onReset, onLoad }: { games: GameMe
   );
 }
 
-function Rounds({ games, rounds, overrides, update }: { games: GameMeta[]; rounds: Round[]; overrides: AdminOverrides; update: (o: AdminOverrides) => void }) {
-  const [game, setGame] = useState(games[0]?.id ?? '');
-  const [filter, setFilter] = useState<'all' | 'usable' | 'review'>('review');
+function SyncChip({ sync }: { sync: Sync }) {
+  if (sync === 'idle') return null;
+  const txt = { saving: 'שומר…', shared: 'נשמר לכל השחקנים ✓', local: 'נשמר רק במכשיר הזה' }[sync];
+  return <span className={`chip hidden text-xs sm:inline-flex ${sync === 'shared' ? 'border-amber-400 text-amber-300' : sync === 'local' ? 'text-cherry-300' : 'text-ink-400'}`}>{txt}</span>;
+}
+
+type StatusFilter = 'all' | 'playable' | 'off' | 'edited' | 'disabled' | 'reviewed';
+
+/** Search + filters over the questions; "review" mode shows only what needs a human look. */
+function Questions({ mode, games, rounds, overrides, update }: { mode: 'review' | 'all'; games: GameMeta[]; rounds: Round[]; overrides: AdminOverrides; update: (o: AdminOverrides) => void }) {
   const [q, setQ] = useState('');
-  const [limit, setLimit] = useState(25);
-  const list = rounds.filter((r) => (!game || r.gameId === game) && (filter === 'all' || (filter === 'usable') === r.usable) && (!q || r.prompt.includes(q) || r.id.includes(q)));
+  const [game, setGame] = useState('');
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [flag, setFlag] = useState<ReviewFlag | ''>('');
+  const [adult, setAdult] = useState<'any' | 'general' | 'mature'>('any');
+  const [showReviewed, setShowReviewed] = useState(false);
+  const [limit, setLimit] = useState(30);
+  const gameById = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
+  const withFlags = useMemo(() => rounds.map((r) => ({ r, flags: reviewFlags(r) })), [rounds]);
+  const base = withFlags.filter(({ r, flags }) => mode === 'all' || (flags.length > 0 && (showReviewed || !overrides.edits[r.id]?.reviewed)));
+  const terms = normalize(q);
+  const list = base.filter(({ r, flags }) => {
+    const e = overrides.edits[r.id];
+    if (game && r.gameId !== game) return false;
+    if (flag && !flags.includes(flag)) return false;
+    if (adult !== 'any' && (adult === 'mature') !== r.mature) return false;
+    if (status === 'playable' && !r.usable) return false;
+    if (status === 'off' && r.usable) return false;
+    if (status === 'edited' && !(e?.p !== undefined || e?.a !== undefined)) return false;
+    if (status === 'disabled' && !e?.disabled) return false;
+    if (status === 'reviewed' && !e?.reviewed) return false;
+    if (terms.length) {
+      const hay = new Set([...normalize(r.prompt), ...normalize(gameById.get(r.gameId)?.title ?? ''), r.id.toLowerCase()]);
+      const text = normalize(r.prompt).join(' ');
+      if (!terms.every((t) => hay.has(t) || text.includes(t) || r.id.toLowerCase().includes(t))) return false;
+    }
+    return true;
+  });
+  useEffect(() => setLimit(30), [q, game, status, flag, adult, mode]);
+  const flagCounts = useMemo(() => {
+    const c: Partial<Record<ReviewFlag, number>> = {};
+    for (const { flags } of base) for (const f of flags) c[f] = (c[f] ?? 0) + 1;
+    return c;
+  }, [base]);
+
   return (
     <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-3">
-        <select className="input" value={game} onChange={(e) => setGame(e.target.value)} aria-label="משחק">
+      {mode === 'review' && (
+        <p className="text-sm text-ink-400">שאלות שכדאי לבדוק: לא נכנסו למשחק, חסרה בהן מילה, נקטעו, או שהכתוביות היו לא ברורות. מתקנים, ואז "סומן כנבדק" כדי להוציא מהרשימה.</p>
+      )}
+      <div className="relative">
+        <input className="input ps-11" type="search" placeholder="חיפוש בטקסט, במשחק או במזהה…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש שאלות" />
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-ink-400" aria-hidden>
+          🔍
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <select className="input text-base" value={game} onChange={(e) => setGame(e.target.value)} aria-label="משחק">
           <option value="">כל המשחקים</option>
           {games.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.title} ({g.count}/{g.count + g.unresolved})
+              {g.title}
             </option>
           ))}
         </select>
-        <select className="input" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} aria-label="סינון">
-          <option value="review">לבדיקה</option>
-          <option value="usable">פעילות</option>
-          <option value="all">הכל</option>
+        <select className="input text-base" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="מצב">
+          <option value="all">כל המצבים</option>
+          <option value="playable">במשחק</option>
+          <option value="off">לא במשחק</option>
+          <option value="edited">ערכתי</option>
+          <option value="disabled">הושבת ידנית</option>
+          <option value="reviewed">סומן כנבדק</option>
         </select>
-        <input className="input" placeholder="חיפוש" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input text-base" value={adult} onChange={(e) => setAdult(e.target.value as typeof adult)} aria-label="תוכן">
+          <option value="any">כל התוכן</option>
+          <option value="general">רגיל</option>
+          <option value="mature">18+</option>
+        </select>
+        {mode === 'review' ? (
+          <label className="flex min-h-[52px] items-center gap-2 rounded-2xl border border-ink-600 px-3 text-sm">
+            <input type="checkbox" className="h-5 w-5 accent-amber-400" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
+            להציג גם נבדקות
+          </label>
+        ) : (
+          <span />
+        )}
       </div>
+      {mode === 'review' && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="סיבה">
+          <button aria-pressed={!flag} onClick={() => setFlag('')} className={`chip min-h-[40px] ${!flag ? 'border-amber-400 text-amber-300' : 'text-ink-400'}`}>
+            הכל ({base.length})
+          </button>
+          {(Object.keys(FLAG_LABELS) as ReviewFlag[])
+            .filter((f) => flagCounts[f])
+            .map((f) => (
+              <button key={f} aria-pressed={flag === f} onClick={() => setFlag(flag === f ? '' : f)} className={`chip min-h-[40px] ${flag === f ? 'border-amber-400 text-amber-300' : 'text-ink-400'}`}>
+                {FLAG_LABELS[f]} ({flagCounts[f]})
+              </button>
+            ))}
+        </div>
+      )}
       <p className="text-sm text-ink-400">{list.length} שאלות</p>
-      {list.slice(0, limit).map((r) => (
-        <RoundEditor key={r.id} round={r} game={games.find((g) => g.id === r.gameId)!} overrides={overrides} update={update} />
+      {list.slice(0, limit).map(({ r, flags }) => (
+        <RoundEditor key={r.id} round={r} flags={flags} game={gameById.get(r.gameId)!} overrides={overrides} update={update} />
       ))}
       {list.length > limit && (
-        <button className="btn-ghost w-full" onClick={() => setLimit((l) => l + 25)}>
-          עוד
+        <button className="btn-ghost w-full" onClick={() => setLimit((l) => l + 30)}>
+          עוד {Math.min(30, list.length - limit)}
         </button>
       )}
+      {!list.length && <p className="card p-6 text-center text-ink-400">{mode === 'review' ? 'אין שאלות שמחכות לבדיקה עם הסינון הזה 🎉' : 'לא נמצאו שאלות.'}</p>}
     </div>
   );
 }
 
 let evidenceCache: Record<string, string> | null = null;
 
-function RoundEditor({ round, game, overrides, update }: { round: Round; game: GameMeta; overrides: AdminOverrides; update: (o: AdminOverrides) => void }) {
+function RoundEditor({ round, flags, game, overrides, update }: { round: Round; flags: ReviewFlag[]; game: GameMeta; overrides: AdminOverrides; update: (o: AdminOverrides) => void }) {
   const edit = overrides.edits[round.id] ?? {};
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(round.prompt);
   const [ev, setEv] = useState<Evidence | null>(null);
   const secret = useMemo(() => openSecret(round), [round]);
-  const set = (patch: Partial<typeof edit>) => update({ ...overrides, edits: { ...overrides.edits, [round.id]: { ...edit, ...patch } } });
+  const original = useMemo(() => (edit.p !== undefined ? resolveDeck().rounds.find((x) => x.id === round.id)?.prompt ?? null : null), [edit.p, round.id]);
+  useEffect(() => setDraft(round.prompt), [round.prompt]);
+  const set = (patch: Partial<typeof edit>) => {
+    const next = { ...edit, ...patch };
+    for (const k of Object.keys(next) as (keyof typeof next)[]) if (next[k] === undefined) delete next[k];
+    update({ ...overrides, edits: { ...overrides.edits, [round.id]: next } });
+  };
   const loadEvidence = async () => {
     if (round.custom) {
       const c = overrides.custom.find((x) => x.id === round.id);
@@ -256,63 +358,104 @@ function RoundEditor({ round, game, overrides, update }: { round: Round; game: G
     evidenceCache ??= (await import('../generated/evidence.json')).default as Record<string, string>;
     setEv(unseal<Evidence>('ev:' + round.id, evidenceCache[round.id]));
   };
+  const dirty = draft.trim() !== round.prompt.trim();
+
   return (
-    <details className="card p-4">
-      <summary className="flex cursor-pointer flex-wrap items-center gap-2">
-        <span className={`chip ${round.usable ? 'border-amber-400 text-amber-300' : 'text-cherry-300'}`}>{round.usable ? 'פעיל' : 'לבדיקה'}</span>
-        <span className="chip text-ink-400">{round.confidence}</span>
-        {round.mature && <span className="chip text-cherry-300">18+</span>}
-        <span className="text-xs text-ink-400">{round.id}</span>
-        <span className="w-full truncate text-white">{round.prompt || '(אין טקסט)'}</span>
-      </summary>
-      <div className="mt-3 space-y-3">
-        <textarea className="input min-h-[90px] py-2 text-base" defaultValue={round.prompt} onBlur={(e) => e.target.value !== round.prompt && set({ p: e.target.value })} aria-label="טקסט השאלה" />
-        {game.engine === 'realfake' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-ink-400">תשובה:</span>
-            {Object.entries(game.options).map(([k, l]) => (
-              <button key={k} aria-pressed={secret.a === k} onClick={() => set({ a: k })} className={`chip min-h-[40px] ${secret.a === k ? 'border-amber-400 text-amber-300' : ''}`}>
-                {l}
-              </button>
+    <article className={`card p-4 ${edit.reviewed ? 'opacity-70' : ''}`}>
+      <button className="w-full text-start" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-bold text-amber-300">
+            {game.emoji} {game.title}
+          </span>
+          <span className={`chip py-0 ${round.usable ? 'border-amber-400/60 text-amber-300' : 'text-cherry-300'}`}>{round.usable ? 'במשחק' : 'לא במשחק'}</span>
+          {!round.usable && round.reason && <span className="chip py-0 text-ink-400">{REASON_LABELS[round.reason] ?? round.reason}</span>}
+          {flags
+            .filter((f) => f !== 'not-playable')
+            .map((f) => (
+              <span key={f} className="chip border-cherry-500/50 py-0 text-cherry-200">
+                {FLAG_LABELS[f]}
+              </span>
             ))}
-            <button onClick={() => set({ a: null })} className={`chip min-h-[40px] ${secret.a == null ? 'border-cherry-400 text-cherry-300' : ''}`}>
-              לא ידוע
-            </button>
-          </div>
-        )}
-        {round.choices && <p className="text-sm text-ink-400">אפשרויות: {round.choices.join(' / ')}</p>}
-        {secret.rv && <p className="text-sm italic text-ink-400">חשיפה: ״{secret.rv}״</p>}
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost min-h-[44px] text-base" onClick={() => set({ approve: !edit.approve })} aria-pressed={!!edit.approve}>
-            {edit.approve ? '✓ אושר ידנית' : 'אישור ידני'}
-          </button>
-          <button className="btn-ghost min-h-[44px] text-base" onClick={() => set({ disabled: !edit.disabled })} aria-pressed={!!edit.disabled}>
-            {edit.disabled ? 'מושבת — להפעיל' : 'השבתה'}
-          </button>
-          <button className="btn-ghost min-h-[44px] text-base" onClick={loadEvidence}>
-            ראיות מהמקור
-          </button>
-          {round.custom && (
-            <button className="btn-ghost min-h-[44px] text-base text-cherry-300" onClick={() => update({ ...overrides, custom: overrides.custom.filter((c) => c.id !== round.id) })}>
-              מחיקה
-            </button>
-          )}
+          {(edit.p !== undefined || edit.a !== undefined) && <span className="chip border-cyan-400/60 py-0 text-cyan-300">נערך</span>}
+          {edit.reviewed && <span className="chip py-0 text-ink-400">✓ נבדק</span>}
+          {round.mature && <span className="chip py-0 text-cherry-300">18+</span>}
         </div>
-        {ev && (
-          <div className="rounded-2xl bg-ink-950 p-3 text-sm">
-            <p>
-              <b>מקור:</b> {ev.src} · שורות {ev.ls}–{ev.le} {ev.t0 && `· ${ev.t0}–${ev.t1 ?? ''}`}
-            </p>
-            <p>
-              <b>מצב:</b> {ev.st} {ev.why && `· ${ev.why}`} {ev.cand && `· מועמד: ${ev.cand}`}
-            </p>
-            {ev.dis && <p className="text-cherry-300">{ev.dis}</p>}
-            {ev.raw && <p className="mt-2 whitespace-pre-wrap text-ink-400">{ev.raw}</p>}
-            {ev.notes && <p className="mt-2 text-ink-400">הערות: {ev.notes}</p>}
+        <p className="text-white">{round.prompt || '(אין טקסט)'}</p>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3 border-t border-ink-700 pt-3">
+          <label className="label" htmlFor={`edit-${round.id}`}>
+            טקסט השאלה
+          </label>
+          <textarea id={`edit-${round.id}`} className="input min-h-[100px] py-2 text-base" value={draft} onChange={(e) => setDraft(e.target.value)} />
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-amber min-h-[44px] text-base" disabled={!dirty || !draft.trim()} onClick={() => set({ p: draft.trim() })}>
+              שמירת הטקסט
+            </button>
+            {dirty && (
+              <button className="btn-ghost min-h-[44px] text-base" onClick={() => setDraft(round.prompt)}>
+                ביטול
+              </button>
+            )}
+            {edit.p !== undefined && (
+              <button className="btn-ghost min-h-[44px] text-base" onClick={() => set({ p: undefined })}>
+                חזרה לטקסט המקורי
+              </button>
+            )}
           </div>
-        )}
-      </div>
-    </details>
+          {original && <p className="text-xs text-ink-400">המקורי: {original}</p>}
+          {game.engine === 'realfake' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-ink-400">תשובה:</span>
+              {Object.entries(game.options).map(([k, l]) => (
+                <button key={k} aria-pressed={secret.a === k} onClick={() => set({ a: k })} className={`chip min-h-[40px] ${secret.a === k ? 'border-amber-400 text-amber-300' : ''}`}>
+                  {l}
+                </button>
+              ))}
+              <button onClick={() => set({ a: null })} className={`chip min-h-[40px] ${secret.a == null ? 'border-cherry-400 text-cherry-300' : ''}`}>
+                לא ידוע
+              </button>
+            </div>
+          )}
+          {round.choices && <p className="text-sm text-ink-400">אפשרויות: {round.choices.join(' / ')}</p>}
+          {secret.rv && <p className="text-sm italic text-ink-400">חשיפה: ״{secret.rv}״</p>}
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-ghost min-h-[44px] text-base" onClick={() => set({ reviewed: edit.reviewed ? undefined : true })} aria-pressed={!!edit.reviewed}>
+              {edit.reviewed ? '✓ סומן כנבדק' : 'סימון כנבדק'}
+            </button>
+            {!round.usable && !edit.disabled && (
+              <button className="btn-ghost min-h-[44px] text-base" onClick={() => set({ approve: !edit.approve })} aria-pressed={!!edit.approve}>
+                {edit.approve ? '✓ הוכנס למשחק' : 'להכניס למשחק'}
+              </button>
+            )}
+            <button className="btn-ghost min-h-[44px] text-base" onClick={() => set({ disabled: edit.disabled ? undefined : true })} aria-pressed={!!edit.disabled}>
+              {edit.disabled ? 'מושבת — להחזיר' : 'להוציא מהמשחק'}
+            </button>
+            <button className="btn-ghost min-h-[44px] text-base" onClick={loadEvidence}>
+              מה נאמר בפודקאסט
+            </button>
+            {round.custom && (
+              <button className="btn-ghost min-h-[44px] text-base text-cherry-300" onClick={() => update({ ...overrides, custom: overrides.custom.filter((c) => c.id !== round.id) })}>
+                מחיקה
+              </button>
+            )}
+          </div>
+          {edit.approve && game.engine === 'realfake' && secret.a == null && <p className="text-sm text-cherry-300">כדי שהשאלה תיכנס למשחק צריך לבחור תשובה.</p>}
+          {ev && (
+            <div className="rounded-2xl bg-ink-950 p-3 text-sm">
+              <p>
+                <b>מקור:</b> {ev.src} · שורות {ev.ls}–{ev.le} {ev.t0 && `· ${ev.t0}–${ev.t1 ?? ''}`}
+              </p>
+              {ev.cand && <p>תשובה אפשרית (לא ודאית): {game.options[ev.cand] ?? ev.cand}</p>}
+              {ev.dis && <p className="text-cherry-300">{ev.dis}</p>}
+              {ev.raw && <p className="mt-2 whitespace-pre-wrap text-ink-400">{ev.raw}</p>}
+              {ev.notes && <p className="mt-2 text-ink-400">הערות: {ev.notes}</p>}
+            </div>
+          )}
+          <p className="text-[11px] text-ink-400">מזהה: {round.id}</p>
+        </div>
+      )}
+    </article>
   );
 }
 

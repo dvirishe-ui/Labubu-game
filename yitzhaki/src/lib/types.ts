@@ -38,6 +38,10 @@ export interface DeckRound {
   m: boolean;
   u: boolean;
   c: string;
+  /** Why the round isn't playable (build reason code), or null. */
+  r?: string | null;
+  /** Source status: verified_in_transcript | ambiguous_autocaption | no_reveal_found | needs_media. */
+  st?: string;
   x: string;
 }
 
@@ -60,6 +64,8 @@ export interface Round {
   mature: boolean;
   usable: boolean;
   confidence: string;
+  reason?: string | null;
+  sourceStatus?: string;
   custom?: boolean;
   /** Sealed payload, opened only at reveal time. */
   sealed: string;

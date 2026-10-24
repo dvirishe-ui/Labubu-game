@@ -19,12 +19,15 @@ export interface RoundEdit {
   a?: string | null;
   approve?: boolean;
   disabled?: boolean;
+  /** Marked as checked in the editor's review list. */
+  reviewed?: boolean;
 }
 
 export interface AdminOverrides {
   edits: Record<string, RoundEdit>;
   custom: CustomRound[];
   rules: Record<string, string>;
+  updatedAt?: number;
 }
 
 const deck = rawDeck as { version: number; games: GameMeta[]; rounds: DeckRound[] };
@@ -37,6 +40,44 @@ export function loadOverrides(): AdminOverrides {
 
 export function saveOverrides(o: AdminOverrides): void {
   save('admin.v1', o);
+}
+
+export type ReviewFlag = 'not-playable' | 'placeholder' | 'cut-off' | 'censored' | 'unclear-captions' | 'too-short' | 'too-long';
+
+export const FLAG_LABELS: Record<ReviewFlag, string> = {
+  'not-playable': 'לא במשחק',
+  placeholder: 'שם/מילה חסרים',
+  'cut-off': 'משפט קטוע',
+  censored: 'מילה מצונזרת',
+  'unclear-captions': 'כתוביות לא ברורות',
+  'too-short': 'קצר מדי',
+  'too-long': 'ארוך מאוד'
+};
+
+export const REASON_LABELS: Record<string, string> = {
+  low_confidence: 'אין חשיפה ברורה / ביטחון נמוך',
+  no_reveal_found: 'לא נמצאה חשיפה',
+  no_intelligible_prompt: 'אין טקסט ברור',
+  needs_media: 'צריך תמונה/הקלטה',
+  disabled: 'הושבת (תוכן רגיש)',
+  duplicate: 'כפילות',
+  discussion_only: 'שיחה בלבד, לא שאלה',
+  answer_not_in_options: 'תשובה לא תקינה',
+  fmk_needs_three_options: 'חסרות אפשרויות'
+};
+
+/** Why a round might need a human look. Empty = looks fine. */
+export function reviewFlags(r: Round): ReviewFlag[] {
+  const f: ReviewFlag[] = [];
+  const t = r.prompt ?? '';
+  if (!r.usable) f.push('not-playable');
+  if (/\[[^\]]*\]/.test(t)) f.push('placeholder');
+  if (/…|\.\.\./.test(t)) f.push('cut-off');
+  if (/\*\*\*/.test(t)) f.push('censored');
+  if (r.sourceStatus === 'ambiguous_autocaption') f.push('unclear-captions');
+  if (t.trim() && t.trim().length < 12) f.push('too-short');
+  if (t.length > 280) f.push('too-long');
+  return f;
 }
 
 export function baseGames(): GameMeta[] {
@@ -70,6 +111,8 @@ export function resolveDeck(
       mature: d.m,
       usable: d.u,
       confidence: d.c,
+      reason: d.r ?? null,
+      sourceStatus: d.st,
       sealed: d.x,
       plain: e.a !== undefined ? { a: e.a } : undefined
     };

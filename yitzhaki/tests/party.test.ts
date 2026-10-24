@@ -130,3 +130,16 @@ describe('self-hosted store', () => {
     expect((await fetch(`${base}/profile`)).status).toBe(400);
   });
 });
+
+describe('shared editor copy', () => {
+  it('only accepts writes carrying the editor key', async () => {
+    const { serverKey } = await import('../src/lib/hash');
+    const url = `http://localhost:${port}/api/store/editor/shared`;
+    const put = (key?: string) => fetch(url, { method: 'PUT', headers: { 'content-type': 'application/json', ...(key ? { 'x-editor-key': key } : {}) }, body: JSON.stringify({ v: 1, x: 'sealed', updatedAt: 1 }) });
+    expect((await put()).status).toBe(403);
+    expect((await put(serverKey('not-it'))).status).toBe(403);
+    expect((await put(serverKey('25092008'))).status).toBe(200);
+    expect(await (await fetch(url)).json()).toEqual({ v: 1, x: 'sealed', updatedAt: 1 });
+    expect((await fetch(`http://localhost:${port}/api/store/editor`)).status).toBe(400);
+  });
+});

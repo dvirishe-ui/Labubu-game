@@ -1,3 +1,5 @@
+import type { AdminOverrides } from './deck';
+import { seal, unseal } from './obfuscate';
 import { clientId, partyAvailable } from './party';
 import type { Profile } from './profile';
 
@@ -28,7 +30,21 @@ export interface Cloud {
   saveAnswers(a: Record<string, string>): Promise<void>;
   loadPlayers(): Promise<PublicPlayer[]>;
   loadAnswers(): Promise<{ id: string; a: Record<string, string> }[]>;
+  /** Editor changes shared with every player (only the owner / editor can write them). */
+  loadEditor(): Promise<AdminOverrides | null>;
+  saveEditor(o: AdminOverrides, key: string): Promise<boolean>;
 }
+
+// Edits can include answers, so the shared copy is sealed like the deck.
+const sealEditor = (o: AdminOverrides) => ({ v: 1, x: seal('editor', o), updatedAt: o.updatedAt ?? Date.now() });
+const openEditor = (doc: unknown): AdminOverrides | null => {
+  try {
+    const d = doc as { x?: string } | null;
+    return d?.x ? unseal<AdminOverrides>('editor', d.x) : null;
+  } catch {
+    return null;
+  }
+};
 
 export function aggregate(rows: { id: string; a: Record<string, string> }[], selfId: string): CrowdStats {
   const byQuestion: CrowdStats['byQuestion'] = {};
@@ -94,6 +110,17 @@ async function artifactCloud(): Promise<Cloud | null> {
     async loadAnswers() {
       const s = await db.collection('crowd').limit(1000).get();
       return s.docs.filter((d) => d.exists).map((d) => ({ id: d.id, a: ((d.data() ?? {}) as { a?: Record<string, string> }).a ?? {} }));
+    },
+    async loadEditor() {
+      const d = await db.doc('editor/overrides').get();
+      return d.exists ? openEditor(d.data()) : null;
+    },
+    async saveEditor(o) {
+      // Access rules let only the artifact's owner write here; anyone else keeps edits on their device.
+      return run('editor/overrides', () => db.doc('editor/overrides').set(sealEditor(o))).then(
+        () => true,
+        () => false
+      );
     }
   };
 }
@@ -119,7 +146,12 @@ async function serverCloud(): Promise<Cloud | null> {
     savePlayer: (p) => put(`players/${id}`, { ...p, id }),
     saveAnswers: (a) => put(`crowd/${id}`, { a }),
     loadPlayers: () => get<PublicPlayer[]>('players'),
-    loadAnswers: () => get<{ id: string; a: Record<string, string> }[]>('crowd')
+    loadAnswers: () => get<{ id: string; a: Record<string, string> }[]>('crowd'),
+    loadEditor: () => get<unknown>('editor/shared').then(openEditor, () => null),
+    saveEditor: async (o, key) => {
+      const r = await fetch('./api/store/editor/shared', { method: 'PUT', headers: { 'content-type': 'application/json', 'x-editor-key': key }, body: JSON.stringify(sealEditor(o)) }).catch(() => null);
+      return !!r?.ok;
+    }
   };
 }
 

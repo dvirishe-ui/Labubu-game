@@ -16,7 +16,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.
 
 /** Tiny JSON store for profiles, leaderboards and answer statistics (self-hosted mode). */
 function createStore(file) {
-  let data = { profile: {}, players: {}, crowd: {} };
+  let data = { profile: {}, players: {}, crowd: {}, editor: {} };
   if (file && fs.existsSync(file)) {
     try {
       data = { ...data, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
@@ -37,6 +37,9 @@ function createStore(file) {
 }
 
 const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+// Saving shared editor changes needs the editor password: the app sends sha256('gag-server:' + password),
+// which can't be derived from the app's own code. Change it together with EDITOR_HASH in src/lib/hash.ts.
+const EDITOR_HASH = process.env.EDITOR_KEY_HASH || '40e1a2abb4a8cface526a313bbfb9c67fffbbf1f7cd280547fb449716fb52e0b';
 
 function readBody(req, limit = 300_000) {
   return new Promise((resolve, reject) => {
@@ -63,19 +66,21 @@ function readBody(req, limit = 300_000) {
 export function createPartyServer({ storeFile = process.env.STORE_FILE ?? null } = {}) {
   const rooms = new Map();
   const store = createStore(storeFile);
+  store.data.editor ??= {};
   const deck = JSON.parse(fs.readFileSync(DECK_FILE, 'utf8'));
   const gameOf = (id) => deck.games.find((g) => g.id === id);
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
-    const sm = url.pathname.match(/^\/api\/store\/(profile|players|crowd)(?:\/([^/]+))?$/);
+    const sm = url.pathname.match(/^\/api\/store\/(profile|players|crowd|editor)(?:\/([^/]+))?$/);
     if (sm) {
       const [, kind, id] = sm;
       const json = (code, body) => {
         res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         res.end(JSON.stringify(body));
       };
-      if (req.method === 'GET' && !id && kind !== 'profile') {
+      if (kind === 'editor' && req.method === 'PUT' && (!EDITOR_HASH || req.headers['x-editor-key'] !== EDITOR_HASH)) return json(403, { error: 'editor_key' });
+      if (req.method === 'GET' && !id && kind !== 'profile' && kind !== 'editor') {
         const rows = Object.entries(store.data[kind]).map(([rid, v]) => ({ ...v, id: rid }));
         return json(200, rows);
       }
