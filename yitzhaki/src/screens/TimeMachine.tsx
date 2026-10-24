@@ -7,7 +7,7 @@ import { equip, unlockSecret } from '../lib/economy';
 import { newSeed } from '../lib/rng';
 import { sfx } from '../lib/sound';
 import { profileStore, useProfile } from '../lib/store';
-import { ERAS, flap, gapAt, newGame, PLAYER_X, proceed, R, step, WALL_W, yearOf, type TMState } from '../lib/timeMachine';
+import { ERAS, flap, gapAt, newGame, PLAYER_X, proceed, R, step, WALL_W, monthLabel, monthOf, type TMState } from '../lib/timeMachine';
 
 const THEMES = [
   { sky: ['#141a33', '#0c0b0d'], wall: '#29252f', edge: '#ffbe3b', accent: '#ffbe3b' },
@@ -15,7 +15,7 @@ const THEMES = [
   { sky: ['#4a2a00', '#0c0700'], wall: '#7c4a03', edge: '#fff1a8', accent: '#ffd76a' }
 ];
 
-/** Hidden mini-game: fly from 2026 to 2066 to meet the secret character. */
+/** Hidden mini-game: fly from today to 2028 to meet the secret character. */
 export default function TimeMachine({ onBack }: { onBack: () => void }) {
   const p = useProfile();
   const already = p.owned.includes(SECRET_CHARACTER.id);
@@ -33,7 +33,7 @@ export default function TimeMachine({ onBack }: { onBack: () => void }) {
           </div>
         </div>
         <p className="relative font-display text-3xl text-white">{SECRET_CHARACTER.name}</p>
-        <p className="relative max-w-xs text-ink-200">הגעת ל־2066. הדמות הזאת לא נמכרת בחנות — רק מי שסיים את מכונת הזמן מקבל אותה.</p>
+        <p className="relative max-w-xs text-ink-200">הגעת ל־2028. הדמות הזאת לא נמכרת בחנות — רק מי שסיים את מכונת הזמן מקבל אותה.</p>
         <div className="relative grid w-full max-w-xs grid-cols-2 gap-2">
           <button className="btn-ghost" onClick={onBack}>
             חזרה
@@ -68,13 +68,13 @@ export default function TimeMachine({ onBack }: { onBack: () => void }) {
       <TopBar onBack={onBack} title="מכונת הזמן" />
       <section className="card relative overflow-hidden p-6 text-center">
         <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: 'radial-gradient(circle at 50% 30%, #22d3ee55, transparent 60%)' }} />
-        <p className="relative text-sm font-bold uppercase tracking-[.3em] text-cyan-300">הודעה מ־2066</p>
+        <p className="relative text-sm font-bold uppercase tracking-[.3em] text-cyan-300">הודעה מ־2028</p>
         <h2 className="relative mt-2 font-display text-3xl text-white">מישהו מחכה לך בעתיד</h2>
-        <p className="relative mt-3 text-ink-200">טסים מ־2026 ל־2066 דרך קירות של לוחות שנה. הקשה (או רווח) = דחיפה למעלה. עוברים שלוש תקופות, ולכל תקופה שלושה לבבות. נגמרו? מתחילים שוב רק את התקופה.</p>
+        <p className="relative mt-3 text-ink-200">טסים מהיום ל־2028 דרך קירות של לוחות שנה. הקשה (או רווח) = דחיפה למעלה. עוברים שלוש תקופות, ולכל תקופה שלושה לבבות. נגמרו? מתחילים שוב רק את התקופה.</p>
         <ul className="relative mt-4 space-y-1 text-sm text-ink-400">
           {ERAS.map((e) => (
             <li key={e.name}>
-              {e.from}–{e.to} · {e.name}
+              {monthLabel(e.from)} – {monthLabel(e.to)} · {e.name}
             </li>
           ))}
         </ul>
@@ -92,7 +92,7 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const game = useRef<TMState | null>(null);
   const headSvg = useRef<SVGSVGElement>(null);
-  const [hud, setHud] = useState({ year: 2026, lives: 3, era: 0, clocks: 0, status: 'ready' as TMState['status'] });
+  const [hud, setHud] = useState({ month: ERAS[0].from, lives: 3, era: 0, clocks: 0, status: 'ready' as TMState['status'] });
   const won = useRef(false);
   const winRef = useRef(onWin);
   winRef.current = onWin;
@@ -249,8 +249,8 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
       }
       draw(s);
       setHud((h) => {
-        const year = yearOf(s);
-        return h.year === year && h.lives === s.lives && h.era === s.era && h.clocks === s.clocksTaken && h.status === s.status ? h : { year, lives: s.lives, era: s.era, clocks: s.clocksTaken, status: s.status };
+        const month = monthOf(s);
+        return h.month === month && h.lives === s.lives && h.era === s.era && h.clocks === s.clocksTaken && h.status === s.status ? h : { month, lives: s.lives, era: s.era, clocks: s.clocksTaken, status: s.status };
       });
       raf = requestAnimationFrame(loop);
     };
@@ -306,7 +306,7 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
         </button>
         <div className="flex-1 text-center">
           <div className="font-display text-3xl tabular-nums text-white" aria-live="polite">
-            {hud.year}
+            {monthLabel(hud.month)}
           </div>
           <div className="text-xs text-ink-400">{era.name}</div>
         </div>
@@ -326,7 +326,7 @@ function Flight({ onWin, onExit }: { onWin: () => void; onExit: () => void }) {
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 p-6">
             <div className="card w-full max-w-xs space-y-3 p-5 text-center animate-pop">
               <p className="font-display text-3xl text-white">{hud.status === 'eraClear' ? `הגעת ל־${era.to}!` : 'נגמרו הלבבות'}</p>
-              <p className="text-ink-200">{hud.status === 'eraClear' ? `הבא בתור: ${ERAS[hud.era + 1].name}` : `מתחילים שוב מ־${era.from}. התקופות שעברת נשמרות.`}</p>
+              <p className="text-ink-200">{hud.status === 'eraClear' ? `הבא בתור: ${ERAS[hud.era + 1].name}` : `מתחילים שוב מ־${monthLabel(era.from)}. התקופות שעברת נשמרות.`}</p>
               <button className="btn-amber w-full text-xl" onClick={cont} autoFocus>
                 {hud.status === 'eraClear' ? 'ממשיכים קדימה' : 'עוד ניסיון'}
               </button>

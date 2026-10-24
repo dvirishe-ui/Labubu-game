@@ -275,7 +275,7 @@ export function buy(p: Profile, itemId: string): Result & { error: BuyError | nu
   return { ...settle(q, []), error: null };
 }
 
-/** Called by the time-machine mini-game when 2066 is reached. Idempotent. */
+/** Called by the time-machine mini-game when 2028 is reached. Idempotent. */
 export function unlockSecret(p: Profile): Result {
   if (p.owned.includes(SECRET_CHARACTER.id)) return { profile: p, events: [] };
   const q = clone(p);

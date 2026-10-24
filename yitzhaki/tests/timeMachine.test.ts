@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ERAS, flap, gapAt, LIVES, newGame, nextWall, proceed, step, yearOf, type TMState } from '../src/lib/timeMachine';
+import { ERAS, flap, gapAt, LIVES, newGame, nextWall, proceed, step, monthLabel, yearOf, type TMState } from '../src/lib/timeMachine';
 
 /** Flaps whenever it is below the middle of the next gap and not already rising fast. */
 function autopilot(s: TMState): TMState {
@@ -22,19 +22,20 @@ function run(seed: string, pilot: (s: TMState) => TMState, maxSeconds = 600) {
 }
 
 describe('מכונת הזמן', () => {
-  it('spans 2026 → 2066 in three eras', () => {
-    expect(ERAS[0].from).toBe(2026);
-    expect(ERAS.at(-1)!.to).toBe(2066);
+  it('spans 2026 → 2028 in three eras', () => {
+    expect(Math.floor(ERAS[0].from / 12)).toBe(2026);
+    expect(Math.floor(ERAS.at(-1)!.to / 12)).toBe(2028);
+    expect(monthLabel(ERAS[0].from)).toBe('אוקטובר 2026');
     for (let i = 1; i < ERAS.length; i++) expect(ERAS[i].from).toBe(ERAS[i - 1].to);
     expect(yearOf(newGame('x'))).toBe(2026);
   });
 
-  it('is beatable: a careful pilot reaches 2066', () => {
+  it('is beatable: a careful pilot reaches 2028', () => {
     for (const seed of ['a', 'b', 'c', 'd', 'e']) {
       const { s, eras } = run(seed, autopilot);
       expect(s.status, seed).toBe('done');
       expect(eras).toEqual([0, 1]);
-      expect(yearOf(s)).toBe(2066);
+      expect(yearOf(s)).toBe(2028);
     }
   });
 

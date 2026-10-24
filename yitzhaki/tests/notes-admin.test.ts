@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findDuplicates, importRounds, parseCsv, similarity } from '../src/lib/admin';
 import { resolveDeck, reviewFlags } from '../src/lib/deck';
-import { createNotes, guessed, skipped, startTurn, timeUp, totals } from '../src/lib/notes';
+import { createNotes, guessed, ROOF_SLIPS, skipped, slipPacks, startTurn, timeUp, totals } from '../src/lib/notes';
 
 describe('פתקים על הגג', () => {
   const slips = ['א', 'ב', 'ג', 'ד', 'ה'];
@@ -90,5 +90,15 @@ describe('editor review list', () => {
     const o = { custom: [], rules: {}, edits: { [base.id]: { p: 'נוסח חדש וברור לשאלה', reviewed: true } } };
     const r = resolveDeck(o as never).rounds.find((x) => x.id === base.id)!;
     expect(r.prompt).toBe('נוסח חדש וברור לשאלה');
+  });
+});
+
+describe('roof slip packs', () => {
+  it('builds the panel, segments and roof packs without duplicates', () => {
+    const packs = slipPacks(['אסף יצחקי', 'יונתן ברק'], resolveDeck().games.map((g) => g.title));
+    expect(packs.map((p) => p.id)).toEqual(['panel', 'segments', 'roof']);
+    expect(packs[1].slips.length).toBe(resolveDeck().games.length);
+    expect(new Set(ROOF_SLIPS).size).toBe(ROOF_SLIPS.length);
+    for (const p of packs) for (const s of p.slips) expect(s.length).toBeLessThanOrEqual(40);
   });
 });

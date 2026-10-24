@@ -2,7 +2,8 @@ import { mulberry32, hashSeed } from './rng';
 
 /**
  * "מכונת הזמן" — the hidden mini-game that unlocks the secret character.
- * A one-button flyer: tap to thrust, pass through gaps in the "calendar walls" from 2026 to 2066.
+ * A one-button flyer: tap to thrust, pass through gaps in the "calendar walls" from today to 2028,
+ * where the older Noam comes from. Era bounds are months (year * 12 + month - 1).
  * Pure simulation in a normalized world (height 1, width = aspect), stepped at a fixed rate.
  */
 
@@ -18,11 +19,17 @@ export interface Era {
   sway: number;
 }
 
+const ym = (y: number, m: number) => y * 12 + m - 1;
+
 export const ERAS: Era[] = [
-  { name: 'הגג של היום', from: 2026, to: 2039, gates: 12, speed: 0.42, gap: 0.36, spacing: 0.66, sway: 0 },
-  { name: 'עתיד ניאון', from: 2039, to: 2053, gates: 12, speed: 0.5, gap: 0.32, spacing: 0.62, sway: 0 },
-  { name: 'גג הזהב של 2066', from: 2053, to: 2066, gates: 12, speed: 0.56, gap: 0.31, spacing: 0.6, sway: 0.05 }
+  { name: 'הגג של היום', from: ym(2026, 10), to: ym(2027, 6), gates: 12, speed: 0.42, gap: 0.36, spacing: 0.66, sway: 0 },
+  { name: 'שנה הבאה על הגג', from: ym(2027, 6), to: ym(2028, 1), gates: 12, speed: 0.5, gap: 0.32, spacing: 0.62, sway: 0 },
+  { name: 'הגג של 2028', from: ym(2028, 1), to: ym(2028, 8), gates: 12, speed: 0.56, gap: 0.31, spacing: 0.6, sway: 0.05 }
 ];
+
+const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+/** "אוקטובר 2026" for a month index. */
+export const monthLabel = (m: number) => `${MONTHS[m % 12]} ${Math.floor(m / 12)}`;
 
 export const G = 1.7;
 export const FLAP = -0.6;
@@ -71,11 +78,13 @@ export function newGame(seed: string, w = 0.6, era = 0): TMState {
   return { w, era, passed: 0, spawned: 0, y: 0.5, vy: 0, t: 0, lives: LIVES, invuln: 0, walls: [], clocks: [], clocksTaken: 0, crashes: 0, status: 'ready', seed, rand: mulberry32(hashSeed(`${seed}:${era}`)) };
 }
 
-/** Year shown on the dashboard. */
-export function yearOf(s: TMState): number {
+/** Month index shown on the dashboard. */
+export function monthOf(s: TMState): number {
   const e = ERAS[s.era];
   return Math.round(e.from + ((e.to - e.from) * s.passed) / e.gates);
 }
+
+export const yearOf = (s: TMState) => Math.floor(monthOf(s) / 12);
 
 export function flap(s: TMState): TMState {
   if (s.status === 'ready') return { ...s, status: 'play', vy: FLAP };

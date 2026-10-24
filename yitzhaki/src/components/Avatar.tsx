@@ -237,7 +237,7 @@ function Scene({ tier, L, g, url }: { tier: Tier; L: CharacterDef['look']; g: (n
           <path key={i} d={`M${100 - (i + 1) * 30} 240 L100 175 L${100 + (i + 1) * 30} 240`} stroke="#67e8f9" strokeOpacity=".25" fill="none" />
         ))}
         <text x="28" y="24" textAnchor="middle" fontSize="13" fill="#67e8f9" fontFamily="Secular One, sans-serif" style={{ filter: 'drop-shadow(0 0 4px #22d3ee)' }}>
-          2066
+          2028
         </text>
       </g>
     );

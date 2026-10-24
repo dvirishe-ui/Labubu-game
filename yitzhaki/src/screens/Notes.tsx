@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ConfirmButton, Confetti, Modal, Screen, Timer, TopBar } from '../components/ui';
-import { createNotes, guessed, NOTE_ROUNDS, SAMPLE_SLIPS, skipped, startTurn, timeUp, totals, type NotesState } from '../lib/notes';
+import { createNotes, guessed, NOTE_ROUNDS, skipped, slipPacks, startTurn, timeUp, totals, type NotesState } from '../lib/notes';
 import { newSeed, shuffle } from '../lib/rng';
 import { sfx } from '../lib/sound';
 import { load, remove, save } from '../lib/storage';
+import { CHARACTERS, SECRET_CHARACTER } from '../lib/characters';
+import { resolveDeck } from '../lib/deck';
+import { useProfile } from '../lib/store';
 
 export default function Notes({ onBack }: { onBack: () => void }) {
   const [state, setState] = useState<NotesState | null>(() => load<NotesState | null>('notes', null));
@@ -16,7 +19,15 @@ export default function Notes({ onBack }: { onBack: () => void }) {
 }
 
 function NotesSetup({ onBack, onStart }: { onBack: () => void; onStart: (s: NotesState) => void }) {
-  const [teams, setTeams] = useState(['כחולים', 'אדומים']);
+  const [teams, setTeams] = useState(['צוות הגג', 'צוות הבמה']);
+  const p = useProfile();
+  const packs = useMemo(() => {
+    // The older Noam only joins the panel pack once he's been found.
+    const panel = [...CHARACTERS.map((c) => c.name), ...(p.owned.includes(SECRET_CHARACTER.id) ? [SECRET_CHARACTER.name] : [])];
+    const segments = resolveDeck().games.filter((g) => !g.mature).map((g) => g.title);
+    return slipPacks(panel, segments);
+  }, [p.owned]);
+  const addPack = (list: string[], n?: number) => setSlips((s) => [...new Set([...s, ...(n ? shuffle(list, newSeed()).slice(0, n) : list)])]);
   const [slips, setSlips] = useState<string[]>([]);
   const [word, setWord] = useState('');
   const [seconds, setSeconds] = useState(45);
@@ -50,7 +61,7 @@ function NotesSetup({ onBack, onStart }: { onBack: () => void; onStart: (s: Note
       </div>
 
       <span className="label">פתקים ({slips.length})</span>
-      <p className="mb-2 text-sm text-ink-400">כל אחד מוסיף בסתר כמה מילים, שמות או ביטויים. או שמוסיפים פתקים מוכנים.</p>
+      <p className="mb-2 text-sm text-ink-400">כל אחד מוסיף בסתר שמות ומילים מהגג — אנשי הפאנל, פינות, רגעים מהפרקים. או שמוסיפים חבילה מוכנה.</p>
       <form
         className="mb-2 flex gap-2"
         onSubmit={(e) => {
@@ -63,9 +74,23 @@ function NotesSetup({ onBack, onStart }: { onBack: () => void; onStart: (s: Note
           הוסף
         </button>
       </form>
+      <div className="mb-2 grid grid-cols-3 gap-2" role="group" aria-label="חבילות פתקים">
+        {packs.map((k) => {
+          const added = k.slips.every((x) => slips.includes(x));
+          return (
+            <button key={k.id} className={`card flex min-h-[88px] flex-col items-center justify-center gap-1 p-2 text-center ${added ? 'border-amber-400/70' : ''}`} onClick={() => addPack(k.slips)} disabled={added} aria-pressed={added}>
+              <span className="text-2xl" aria-hidden>
+                {k.icon}
+              </span>
+              <span className="font-bold leading-tight text-white">{k.title}</span>
+              <span className="text-xs text-ink-400">{added ? '✓ נוסף' : `${k.slips.length} פתקים`}</span>
+            </button>
+          );
+        })}
+      </div>
       <div className="mb-6 flex gap-2">
-        <button className="btn-ghost flex-1 text-base" onClick={() => setSlips((s) => [...new Set([...s, ...shuffle(SAMPLE_SLIPS, newSeed()).slice(0, 10)])])}>
-          + 10 פתקים מוכנים
+        <button className="btn-ghost flex-1 text-base" onClick={() => addPack(packs.flatMap((k) => k.slips), 12)}>
+          + 12 אקראיים מכל הגג
         </button>
         <button className="btn-ghost text-base" disabled={!slips.length} onClick={() => setSlips([])}>
           איפוס
