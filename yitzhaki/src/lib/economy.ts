@@ -1,4 +1,5 @@
 import { CHARACTERS, CROWN_SKIN, charById, isSecret, SECRET_CHARACTER, SECRET_SKIN, skinById } from './characters';
+import { DUO, EGGS, eggById, hasEgg } from './eggs';
 import { levelOf, type Profile } from './profile';
 import { dayKey, weekKey } from './time';
 
@@ -71,6 +72,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'collector-3', title: 'אספן מתחיל', desc: '3 דמויות באוסף', reward: 300, test: (p) => rosterOwned(p).length >= 3 },
   { id: 'full-panel', title: 'הפאנל המלא', desc: 'כל 8 הדמויות', reward: 500, test: (p) => rosterOwned(p).length >= CHARACTERS.length },
   { id: 'roof-legend', title: 'אגדת הגג', desc: 'הסקין "מלך הגג" של אסף', reward: 500, test: (p) => p.skins.includes(CROWN_SKIN.id) },
+  { id: 'first-egg', title: 'מצאת איסטר אג', desc: 'האיסטר אג הראשון שלך', reward: 100, test: (p) => EGGS.some((e) => hasEgg(p, e.id)) },
+  { id: 'all-eggs', title: 'צייד האיסטר אגים', desc: 'כל ששת האיסטר אגים', reward: 500, test: (p) => EGGS.every((e) => hasEgg(p, e.id)) },
   { id: 'time-travel', title: 'נוסע בזמן', desc: 'פגשת את נועם אונגר מהעתיד', reward: 500, secret: true, test: (p) => p.owned.includes(SECRET_CHARACTER.id) }
 ];
 
@@ -242,6 +245,8 @@ export function bumpStats(p: Profile, patch: Partial<Profile['stats']>): Result 
 export type BuyError = 'owned' | 'coins' | 'locked' | 'unknown';
 
 export function priceOf(itemId: string): number | null {
+  const e = eggById(itemId);
+  if (e) return e.price;
   const c = charById(itemId);
   if (c) return c.price;
   const s = skinById(itemId);
@@ -251,6 +256,9 @@ export function priceOf(itemId: string): number | null {
 export function canBuy(p: Profile, itemId: string): BuyError | null {
   // The secret character and its skin are never for sale.
   if (isSecret(itemId) || itemId === SECRET_SKIN.id) return p.owned.includes(SECRET_CHARACTER.id) ? 'owned' : 'locked';
+  // Eggs are for sale whatever character you have; the duo is earned, never bought.
+  const e = eggById(itemId);
+  if (e) return hasEgg(p, e.id) ? 'owned' : e.id === DUO.id ? 'locked' : p.coins < e.price ? 'coins' : null;
   const c = charById(itemId);
   if (c) return p.owned.includes(c.id) ? 'owned' : p.coins < c.price ? 'coins' : null;
   const s = skinById(itemId);
@@ -266,7 +274,8 @@ export function buy(p: Profile, itemId: string): Result & { error: BuyError | nu
   const q = clone(p);
   const price = priceOf(itemId)!;
   q.coins -= price;
-  if (charById(itemId)) {
+  if (eggById(itemId)) q.eggs.push(itemId);
+  else if (charById(itemId)) {
     q.owned.push(itemId);
     q.skins.push(`${itemId}:classic`);
     if (!q.equipped.char) q.equipped = { char: itemId, skin: `${itemId}:classic` };
@@ -297,7 +306,8 @@ export function nextGoal(p: Profile): { id: string; name: string; price: number 
     const c = charById(p.wish);
     const s = skinById(p.wish);
     const price = priceOf(p.wish);
-    if (price != null) return { id: p.wish, name: c ? c.name : `${charById(s!.charId)!.name} · ${s!.name}`, price };
+    const e = eggById(p.wish);
+    if (price != null) return { id: p.wish, name: e ? `${e.icon} ${e.name}` : c ? c.name : `${charById(s!.charId)!.name} · ${s!.name}`, price };
   }
   const c = CHARACTERS.filter((x) => !p.owned.includes(x.id)).sort((a, b) => a.price - b.price)[0];
   return c ? { id: c.id, name: c.name, price: c.price } : null;

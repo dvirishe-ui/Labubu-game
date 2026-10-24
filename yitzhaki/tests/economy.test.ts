@@ -3,6 +3,8 @@ import { CHARACTERS, CROWN_SKIN, skinsFor } from '../src/lib/characters';
 import { buy, CAPS, canBuy, equip, finishDaily, finishGame, nextGoal, recordAnswer, REWARDS, soloCoins, WEEKLY_GOALS } from '../src/lib/economy';
 import { levelOf, newProfile, normalizeProfile, WELCOME_COINS } from '../src/lib/profile';
 import { dayKey, weekDays, weekKey } from '../src/lib/time';
+import { DUO, EGGS, hasEgg, startingPowers } from '../src/lib/eggs';
+import { newRun } from '../src/lib/solo';
 
 const T0 = Date.UTC(2026, 9, 20, 9); // a Tuesday morning in Israel
 const game = (id: string, over = {}) => ({ sessionId: id, answered: 10, durationMs: 5 * 60_000, won: false, perfect: false, ...over });
@@ -167,5 +169,39 @@ describe('secret character', () => {
     expect(unlockSecret(p).profile).toBe(p);
     expect(equip(p, SECRET_SKIN.id).equipped).toEqual({ char: SECRET_CHARACTER.id, skin: SECRET_SKIN.id });
     expect(normalizeProfile(p).owned).toContain(SECRET_CHARACTER.id);
+  });
+});
+
+describe('Easter eggs', () => {
+  const rich = (owned: string[] = []) => ({ ...newProfile(T0), coins: 100000, owned, skins: owned.map((c) => `${c}:classic`) });
+
+  it('sells every egg except the duo, whatever character you have', () => {
+    for (const e of EGGS.filter((x) => x.id !== DUO.id)) {
+      expect(canBuy(rich(), e.id)).toBeNull();
+      const r = buy(rich(['tzach']), e.id);
+      expect(r.error).toBeNull();
+      expect(r.profile.eggs).toContain(e.id);
+      expect(r.profile.coins).toBeLessThanOrEqual(100000 - e.price + 500);
+      expect(canBuy(r.profile, e.id)).toBe('owned');
+    }
+    expect(canBuy({ ...newProfile(T0), coins: 0 }, 'egg:phone')).toBe('coins');
+  });
+
+  it('the duo is earned by owning both Tzach and Noam, never bought', () => {
+    expect(canBuy(rich(), DUO.id)).toBe('locked');
+    expect(canBuy(rich(['tzach']), DUO.id)).toBe('locked');
+    expect(hasEgg(rich(['tzach', 'noam']), DUO.id)).toBe(true);
+    expect(canBuy(rich(['tzach', 'noam']), DUO.id)).toBe('owned');
+  });
+
+  it('runs start with powers only from owned eggs', () => {
+    expect(startingPowers(newProfile(T0))).toEqual({ fifty: 0, answer: 0, life: 0, skip: 0, time: 0 });
+    const p = { ...newProfile(T0), eggs: ['egg:chips', 'egg:weights'] };
+    expect(startingPowers(p)).toEqual({ fifty: 1, answer: 0, life: 1, skip: 0, time: 0 });
+    expect(newRun(1, 's', startingPowers(p)).powerups.life).toBe(1);
+  });
+
+  it('keeps only known, buyable eggs when loading a profile', () => {
+    expect(normalizeProfile({ eggs: ['egg:phone', 'egg:phone', 'egg:duo', 'nope'] }).eggs).toEqual(['egg:phone']);
   });
 });

@@ -4,6 +4,8 @@ import { buy, canBuy, equip } from '../lib/economy';
 import { sfx } from '../lib/sound';
 import { profileStore, useProfile } from '../lib/store';
 import { Avatar } from './Avatar';
+import { EggCard } from './Eggs';
+import { eggsOfChar } from '../lib/eggs';
 import { CoinIcon, fmt, Price } from './Coins';
 
 /** Full-screen character viewer with skin previews, buying (with confirmation + reveal) and equipping. */
@@ -142,6 +144,16 @@ export function CharacterView({ charId, onClose }: { charId: string; onClose: ()
           )}
           <p className="text-center text-xs text-ink-400">סקינים הם קוסמטיים בלבד — לא נותנים יתרון במשחק.</p>
         </div>
+        {eggsOfChar(charId).length > 0 && (
+          <section className="mt-4">
+            <span className="label">🥚 האיסטר אג של {c.name}</span>
+            <div className="space-y-2">
+              {eggsOfChar(charId).map((e) => (
+                <EggCard key={e.id} egg={e} compact={e.chars.length === 1} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       {confirm && (

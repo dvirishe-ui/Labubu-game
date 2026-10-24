@@ -7,12 +7,8 @@ export const START_LIVES = 3;
 export const MAX_LIVES = 5;
 export const ROUNDS_PER_LEVEL = 10;
 export const BOSS_QUESTIONS = 3;
-export const POWERUPS: { id: PowerUp; label: string; icon: string; hint: string }[] = [
-  { id: 'fifty', label: '50/50', icon: '✂️', hint: 'מוחק תשובה שגויה (בשאלות של שלוש אפשרויות)' },
-  { id: 'time', label: '+10 שניות', icon: '⏱️', hint: 'עוד זמן לחשוב' },
-  { id: 'double', label: 'כפול או כלום', icon: '🎲', hint: 'נכון: נקודות כפולות. טעות: עוד לב הולך' },
-  { id: 'skip', label: 'דילוג', icon: '⏭️', hint: 'מדלגים בלי לאבד לב' }
-];
+/** Order of the power buttons during a run. */
+export const POWER_ORDER: PowerUp[] = ['fifty', 'answer', 'life', 'skip', 'time'];
 
 export type SoloKind = 'normal' | 'special' | 'boss';
 
@@ -27,7 +23,8 @@ export function timerFor(level: number, kind: SoloKind): number {
   return kind === 'boss' ? Math.max(8, base - 6) : kind === 'special' ? Math.max(10, base - 4) : base;
 }
 
-export function newRun(level: number, seed: string): SoloRunState {
+/** A new run. `powers` comes from the player's Easter eggs (see eggs.ts startingPowers). */
+export function newRun(level: number, seed: string, powers: Record<PowerUp, number> = { fifty: 0, answer: 0, life: 0, skip: 0, time: 0 }): SoloRunState {
   return {
     seed,
     level,
@@ -38,8 +35,9 @@ export function newRun(level: number, seed: string): SoloRunState {
     correct: 0,
     coins: 0,
     used: [],
-    powerups: { fifty: 1, time: 1, double: 1, skip: 1 },
-    startedAt: Date.now()
+    powerups: { ...powers },
+    startedAt: Date.now(),
+    shieldLevel: null
   };
 }
 
@@ -107,6 +105,8 @@ export function fiftyFifty(q: TripleQ, seed: string): number {
   return wrong[Math.floor(mulberry32(hashSeed(seed + ':5050'))() * wrong.length)];
 }
 
-export function randomPowerUp(seed: string): PowerUp {
-  return POWERUPS[Math.floor(mulberry32(hashSeed(seed))() * POWERUPS.length)].id;
+/** Level-up gift: one extra charge of a power the player has an egg for (null if they have none). */
+export function randomPowerUp(seed: string, available: PowerUp[]): PowerUp | null {
+  if (!available.length) return null;
+  return available[Math.floor(mulberry32(hashSeed(seed))() * available.length)];
 }

@@ -193,7 +193,7 @@ export default function App() {
       screen = <Admin overrides={overrides} onChange={setOverrides} onBack={home} />;
       break;
     case 'solo':
-      screen = <Solo games={games} rounds={rounds} mature={mature} onBack={home} />;
+      screen = <Solo games={games} rounds={rounds} mature={mature} onBack={home} onShop={() => nav('shop')} />;
       break;
     case 'daily':
       screen = <Daily games={games} rounds={rounds} onBack={home} onDuel={() => go({ name: 'duel', initial: null })} />;

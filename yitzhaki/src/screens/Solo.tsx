@@ -18,7 +18,7 @@ import {
   pickSingle,
   pickTriple,
   pointsFor,
-  POWERUPS,
+  POWER_ORDER,
   randomPowerUp,
   ROUNDS_PER_LEVEL,
   soloPool,
@@ -30,6 +30,7 @@ import { sfx } from '../lib/sound';
 import { getCrowd, profileStore, useProfile } from '../lib/store';
 import type { GameMeta, Round } from '../lib/types';
 import SoloDecisions from './SoloDecisions';
+import { DUO, EGGS, eggForPower, hasEgg, startingPowers } from '../lib/eggs';
 
 interface Summary {
   score: number;
@@ -40,7 +41,7 @@ interface Summary {
   exhausted: boolean;
 }
 
-export default function Solo({ games, rounds, mature, onBack }: { games: GameMeta[]; rounds: Round[]; mature: boolean; onBack: () => void }) {
+export default function Solo({ games, rounds, mature, onBack, onShop }: { games: GameMeta[]; rounds: Round[]; mature: boolean; onBack: () => void; onShop?: () => void }) {
   const p = useProfile();
   const [view, setView] = useState<'menu' | 'run' | 'decide'>('menu');
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -126,7 +127,7 @@ export default function Solo({ games, rounds, mature, onBack }: { games: GameMet
         disabled={!pool.length}
         onClick={() => {
           setSummary(null);
-          saveRun(newRun(startLevel, newSeed()));
+          saveRun(newRun(startLevel, newSeed(), startingPowers(p)));
           setView('run');
         }}
       >
@@ -144,17 +145,26 @@ export default function Solo({ games, rounds, mature, onBack }: { games: GameMet
       </button>
 
       <section className="mt-6">
-        <span className="label">כוחות מיוחדים</span>
+        <span className="label">איסטר אגים — הכוחות שלך</span>
         <ul className="grid grid-cols-2 gap-2">
-          {POWERUPS.map((x) => (
-            <li key={x.id} className="rounded-2xl bg-ink-900 p-3 text-sm">
-              <span className="me-1">{x.icon}</span>
-              <b className="text-white">{x.label}</b>
-              <span className="block text-xs text-ink-400">{x.hint}</span>
-            </li>
-          ))}
+          {EGGS.map((e) => {
+            const have = hasEgg(p, e.id);
+            return (
+              <li key={e.id} className={`rounded-2xl border p-3 text-sm ${have ? 'border-amber-400/60 bg-ink-900' : 'border-ink-700 bg-ink-900/60'}`}>
+                <span className={`me-1 ${have ? '' : 'grayscale opacity-60'}`}>{e.icon}</span>
+                <b className={have ? 'text-white' : 'text-ink-400'}>{e.name}</b>
+                <span className="block text-xs text-amber-300">{have ? `✓ ${e.label}` : `🔒 ${e.label}`}</span>
+                <span className="block text-xs text-ink-400">{e.desc}</span>
+              </li>
+            );
+          })}
         </ul>
-        <p className="mt-2 text-xs text-ink-400">כל ריצה מתחילה עם אחד מכל סוג, ועוד אחד בכל שלב שעוברים.</p>
+        <p className="mt-2 text-xs text-ink-400">אין כוחות בחינם: כל ריצה מתחילה עם כוח אחד מכל איסטר אג שיש לך, ועוד אחד במתנה בכל שלב שעוברים.</p>
+        {onShop && (
+          <button className="btn-ghost mt-3 w-full text-base" onClick={onShop}>
+            🥚 לקנות איסטר אגים בחנות
+          </button>
+        )}
       </section>
     </Screen>
   );
@@ -181,6 +191,10 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
   const [phase, setPhase] = useState<Phase>(kind === 'normal' ? 'ask' : 'intro');
   const [doubled, setDoubled] = useState(false);
   const [hidden, setHidden] = useState<number | null>(null);
+  const [told, setTold] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const p = useProfile();
+  const duo = hasEgg(p, DUO.id);
   const [result, setResult] = useState<{ correct: boolean; picked: string | number | null; points: number } | null>(null);
   const [crowd, setCrowd] = useState<CrowdStats | null>(null);
   const [crowdLoading, setCrowdLoading] = useState(true);
@@ -224,15 +238,19 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
     if (phase !== 'ask' || !q) return;
     const correct = q.type === 'single' ? picked === truth : picked === q.answerIndex;
     const points = correct ? pointsFor(run.level, run.streak, timer.left, timer.max, kind, doubled) : 0;
-    const lose = correct ? 0 : doubled ? 2 : 1;
+    // "זוג מנצח": once per level the partner catches a wrong answer.
+    const shield = !correct && duo && run.shieldLevel !== run.level;
+    const lose = correct || shield ? 0 : doubled ? 2 : 1;
+    setSaved(shield);
     const next: SoloRunState = {
       ...run,
+      shieldLevel: shield ? run.level : run.shieldLevel ?? null,
       lives: run.lives - lose,
       score: run.score + points,
       streak: correct ? run.streak + 1 : 0,
       correct: run.correct + (correct ? 1 : 0),
       used: [...run.used, ...ids],
-      powerups: doubled ? { ...run.powerups, double: run.powerups.double - 1 } : run.powerups
+      powerups: doubled ? { ...run.powerups, fifty: (run.powerups.fifty ?? 0) - 1 } : run.powerups
     };
     profileStore.apply((x) => recordAnswer(x, q.type === 'single' ? q.round.id : null, typeof picked === 'string' ? picked : null, correct));
     if (correct) {
@@ -244,8 +262,10 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
       sfx.good();
     } else {
       sfx.bad();
-      setLostHeart(true);
-      setTimeout(() => setLostHeart(false), 700);
+      if (!shield) {
+        setLostHeart(true);
+        setTimeout(() => setLostHeart(false), 700);
+      }
     }
     setResult({ correct, picked, points });
     setPhase('reveal');
@@ -253,7 +273,7 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
   }
 
   function skip() {
-    if (phase !== 'ask' || run.powerups.skip < 1) return;
+    if (phase !== 'ask' || (run.powerups.skip ?? 0) < 1) return;
     sfx.tap();
     save({ ...run, used: [...run.used, ...ids], powerups: { ...run.powerups, skip: run.powerups.skip - 1 } });
     advance({ ...run, used: [...run.used, ...ids], powerups: { ...run.powerups, skip: run.powerups.skip - 1 } }, false);
@@ -263,6 +283,8 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
     setResult(null);
     setDoubled(false);
     setHidden(null);
+    setTold(false);
+    setSaved(false);
     if (cur.lives <= 0) return onEnd(cur, false);
     if (kind === 'boss' && bossStep < BOSS_QUESTIONS - 1) {
       setBossStep((b) => b + 1);
@@ -280,8 +302,9 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
       }
       const lv = profileStore.apply((x) => soloCoins(x, `${run.seed}:level:${run.level}`, REWARDS.soloLevel, `עברת את שלב ${run.level}`));
       next.coins += lv.events.reduce((n, e) => n + (e.type === 'coins' ? e.amount : 0), 0);
-      const gift = randomPowerUp(`${run.seed}:gift:${run.level}`);
-      next = { ...next, level: next.level + 1, round: 1, powerups: { ...next.powerups, [gift]: next.powerups[gift] + 1 } };
+      const owned = POWER_ORDER.filter((pw) => hasEgg(p, eggForPower(pw).id));
+      const gift = randomPowerUp(`${run.seed}:gift:${run.level}`, owned);
+      next = { ...next, level: next.level + 1, round: 1, powerups: gift ? { ...next.powerups, [gift]: (next.powerups[gift] ?? 0) + 1 } : next.powerups };
       setBossStep(0);
       setBossHits(0);
     } else next = { ...next, round: next.round + 1 };
@@ -289,27 +312,55 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
     setPhase(kindOf(next.round) === 'normal' ? 'ask' : 'intro');
   }
 
+  const charges = (pu: PowerUp) => run.powerups[pu] ?? 0;
+  const spend = (pu: PowerUp, extra: Partial<SoloRunState> = {}) => save({ ...run, ...extra, powerups: { ...run.powerups, [pu]: charges(pu) - 1 } });
+  const canUse = (pu: PowerUp) => {
+    if (phase !== 'ask' || charges(pu) < 1) return false;
+    if (pu === 'fifty') return q.type === 'triple' ? hidden == null : true;
+    if (pu === 'answer') return !told;
+    if (pu === 'life') return run.lives < MAX_LIVES;
+    return true;
+  };
   const use = (pu: PowerUp) => {
-    if (phase !== 'ask' || run.powerups[pu] < 1) return;
+    if (!canUse(pu)) return;
     sfx.tap();
     if (pu === 'skip') return skip();
-    if (pu === 'double') return setDoubled((d) => !d);
+    // Chips: a 50/50 on three-option questions, double-or-nothing on two-option ones (charged on answer).
+    if (pu === 'fifty') {
+      if (q.type !== 'triple') return setDoubled((d) => !d);
+      setHidden(fiftyFifty(q, `${run.seed}:${stepKey}`));
+      return spend('fifty');
+    }
     if (pu === 'time') {
       timer.add(10);
-      save({ ...run, powerups: { ...run.powerups, time: run.powerups.time - 1 } });
+      return spend('time');
     }
-    if (pu === 'fifty' && q.type === 'triple' && hidden == null) {
-      setHidden(fiftyFifty(q, `${run.seed}:${stepKey}`));
-      save({ ...run, powerups: { ...run.powerups, fifty: run.powerups.fifty - 1 } });
+    if (pu === 'answer') {
+      setTold(true);
+      return spend('answer');
+    }
+    if (pu === 'life') {
+      sfx.good();
+      return spend('life', { lives: Math.min(MAX_LIVES, run.lives + 1) });
     }
   };
 
   const optionEntries = Object.entries(game.options);
   const header = (
     <div className="mb-3 flex items-center gap-3">
-      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-ink-800">
-        <AvatarMini />
-      </div>
+      {duo ? (
+        <div className="flex shrink-0 -space-x-3 rtl:space-x-reverse" title={DUO.desc}>
+          {DUO.chars.map((c) => (
+            <div key={c} className="h-12 w-11 overflow-hidden rounded-2xl border border-amber-400/50 bg-ink-800">
+              <Avatar charId={c} skinId={p.equipped.char === c ? p.equipped.skin : `${c}:classic`} size={44} animated={false} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-ink-800">
+          <AvatarMini />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className={lostHeart ? 'animate-shake' : ''}>
           <Hearts lives={run.lives} />
@@ -317,6 +368,7 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
         <div className="text-xs text-ink-400">
           שלב {run.level} · סיבוב {run.round}/{ROUNDS_PER_LEVEL}
           {kind === 'boss' && ` · בוס ${bossStep + 1}/${BOSS_QUESTIONS}`}
+          {duo && (run.shieldLevel === run.level ? ' · 🤝 המגן נוצל' : ' · 🤝 מגן פעיל')}
         </div>
       </div>
       <div className="text-left">
@@ -340,7 +392,7 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
             {kind === 'boss'
               ? `${BOSS_QUESTIONS} שאלות בזק ברצף, ניקוד כפול שלוש. עוברים את שלושתן — מקבלים לב נוסף.`
               : q.type === 'triple'
-                ? 'שלוש אפשרויות, רק אחת נכונה. ניקוד כפול — וכאן אפשר להשתמש ב־50/50.'
+                ? 'שלוש אפשרויות, רק אחת נכונה. ניקוד כפול — ועם הצ׳יפים אפשר 50/50.'
                 : 'פחות זמן, ניקוד כפול.'}
           </p>
           <button className="btn-amber w-full max-w-xs text-xl" onClick={() => setPhase('ask')} autoFocus>
@@ -358,7 +410,8 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-ink-400">
           <span aria-hidden>{game.emoji}</span>
           <span className="font-bold text-amber-300">{game.title}</span>
-          {doubled && <span className="chip border-cherry-400 py-0 text-cherry-300">🎲 כפול או כלום</span>}
+          {doubled && <span className="chip border-cherry-400 py-0 text-cherry-300">🎰 כפול או כלום</span>}
+          {told && phase === 'ask' && <span className="chip border-white/60 py-0 text-white">📱 מתן אומר: זאת התשובה</span>}
         </div>
         {q.type === 'single' ? (
           <p className="whitespace-pre-line font-display text-[1.6rem] leading-snug text-white">{q.round.prompt}</p>
@@ -375,14 +428,16 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
         <div className="mt-3 grid grid-cols-2 gap-3">
           {optionEntries.map(([k, label], i) => {
             const isTruth = phase === 'reveal' && k === truth;
+            const hinted = told && phase === 'ask' && k === truth;
             const isWrongPick = phase === 'reveal' && result?.picked === k && k !== truth;
             return (
               <button
                 key={k}
                 disabled={phase !== 'ask'}
                 onClick={() => answer(k)}
-                className={`${i === 0 ? 'btn-amber' : 'btn-cherry'} min-h-[76px] text-xl disabled:opacity-100 ${phase === 'reveal' && !isTruth ? 'opacity-40' : ''} ${isTruth ? 'ring-4 ring-white' : ''} ${isWrongPick ? 'animate-shake' : ''}`}
+                className={`${i === 0 ? 'btn-amber' : 'btn-cherry'} min-h-[76px] text-xl disabled:opacity-100 ${phase === 'reveal' && !isTruth ? 'opacity-40' : ''} ${isTruth || hinted ? 'ring-4 ring-white' : ''} ${isWrongPick ? 'animate-shake' : ''}`}
               >
+                {hinted && '📱 '}
                 {isTruth && '✓ '}
                 {label}
               </button>
@@ -398,9 +453,10 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
                 disabled={phase !== 'ask'}
                 onClick={() => answer(i)}
                 className={`card w-full p-4 text-start text-lg text-white transition active:scale-[.98] ${
-                  phase === 'reveal' ? (i === q.answerIndex ? 'border-amber-400 bg-amber-400/10' : result?.picked === i ? 'border-cherry-500 opacity-70' : 'opacity-50') : ''
+                  phase === 'reveal' ? (i === q.answerIndex ? 'border-amber-400 bg-amber-400/10' : result?.picked === i ? 'border-cherry-500 opacity-70' : 'opacity-50') : told && i === q.answerIndex ? 'border-white ring-2 ring-white' : ''
                 }`}
               >
+                {told && phase === 'ask' && i === q.answerIndex && <span className="me-1">📱</span>}
                 {phase === 'reveal' && i === q.answerIndex && <span className="me-1 text-amber-300">✓</span>}
                 {r.prompt}
               </button>
@@ -410,26 +466,30 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
       )}
 
       {phase === 'ask' && (
-        <div className="mt-5 grid grid-cols-4 gap-2" aria-label="כוחות מיוחדים">
-          {POWERUPS.map((pu) => {
-            const n = run.powerups[pu.id];
-            const off = n < 1 || (pu.id === 'fifty' && (q.type !== 'triple' || hidden != null));
+        <div className="mt-5 grid grid-cols-5 gap-1.5" aria-label="איסטר אגים">
+          {POWER_ORDER.map((pu) => {
+            const egg = eggForPower(pu);
+            const have = hasEgg(p, egg.id);
+            const n = charges(pu);
+            const isDouble = pu === 'fifty' && q.type !== 'triple';
+            const label = pu === 'fifty' ? (q.type === 'triple' ? '50/50' : 'כפול/כלום') : egg.label;
             return (
               <button
-                key={pu.id}
-                disabled={off}
-                onClick={() => use(pu.id)}
-                aria-pressed={pu.id === 'double' ? doubled : undefined}
-                title={pu.hint}
-                className={`relative flex min-h-[60px] flex-col items-center justify-center rounded-2xl border text-xs font-bold transition active:scale-95 disabled:opacity-30 ${
-                  pu.id === 'double' && doubled ? 'border-cherry-400 bg-cherry-500/20 text-cherry-200' : 'border-ink-700 bg-ink-900 text-ink-200'
+                key={pu}
+                disabled={!canUse(pu)}
+                onClick={() => use(pu)}
+                aria-pressed={isDouble ? doubled : undefined}
+                aria-label={`${egg.name}: ${label}${have ? ` (${n})` : ' — נעול, קונים בחנות'}`}
+                title={`${egg.name} — ${egg.desc}`}
+                className={`relative flex min-h-[64px] flex-col items-center justify-center rounded-2xl border px-0.5 text-[11px] font-bold leading-tight transition active:scale-95 disabled:opacity-30 ${
+                  isDouble && doubled ? 'border-cherry-400 bg-cherry-500/20 text-cherry-200' : 'border-ink-700 bg-ink-900 text-ink-200'
                 }`}
               >
-                <span className="text-xl" aria-hidden>
-                  {pu.icon}
+                <span className={`text-xl ${have ? '' : 'grayscale'}`} aria-hidden>
+                  {have ? egg.icon : '🔒'}
                 </span>
-                {pu.label}
-                <span className="absolute -top-1.5 left-1 rounded-full bg-ink-700 px-1.5 text-[11px] tabular-nums">{n}</span>
+                {label}
+                {have && <span className="absolute -top-1.5 left-1 rounded-full bg-ink-700 px-1.5 text-[11px] tabular-nums">{n}</span>}
               </button>
             );
           })}
@@ -440,7 +500,7 @@ function Run({ run, pool, games, save, onEnd, onExit }: { run: SoloRunState; poo
         <div className="mt-4 space-y-3 animate-rise">
           <div className={`rounded-3xl p-4 text-center ${result.correct ? 'bg-amber-400 text-ink-950' : 'bg-cherry-500 text-white'}`}>
             <div className="font-display text-3xl">{result.correct ? `+${fmt(result.points)}` : result.picked == null ? 'נגמר הזמן' : 'לא הפעם'}</div>
-            {!result.correct && <div className="text-sm font-bold">{doubled ? 'הכפול עלה לך שני לבבות' : 'הלך לב'}</div>}
+            {!result.correct && <div className="text-sm font-bold">{saved ? '🤝 הזוג המנצח הציל — הלב נשאר!' : doubled ? 'הכפול עלה לך שני לבבות' : 'הלך לב'}</div>}
           </div>
           {q.type === 'single' && <CrowdLine stat={crowdFor(crowd, q.round.id, truth)} loading={crowdLoading} />}
           {q.type === 'single' && openSecret(q.round).rv && (

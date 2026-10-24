@@ -1,4 +1,5 @@
 import { CHARACTERS, SECRET_CHARACTER } from './characters';
+import { EGGS } from './eggs';
 
 export interface SoloRunState {
   seed: string;
@@ -12,9 +13,12 @@ export interface SoloRunState {
   used: string[];
   powerups: Record<PowerUp, number>;
   startedAt: number;
+  /** Level on which the "זוג מנצח" shield was last used (once per level). */
+  shieldLevel?: number | null;
 }
 
-export type PowerUp = 'fifty' | 'time' | 'double' | 'skip';
+/** Each power comes from one Easter egg (see eggs.ts). */
+export type PowerUp = 'fifty' | 'answer' | 'life' | 'skip' | 'time';
 
 export interface Profile {
   v: 1;
@@ -26,6 +30,8 @@ export interface Profile {
   xp: number;
   owned: string[];
   skins: string[];
+  /** Easter eggs bought in the shop. */
+  eggs: string[];
   equipped: { char: string | null; skin: string | null };
   favorite: string | null;
   wish: string | null;
@@ -75,6 +81,7 @@ export function newProfile(now = Date.now()): Profile {
     xp: 0,
     owned: [],
     skins: [],
+    eggs: [],
     equipped: { char: null, skin: null },
     favorite: null,
     wish: null,
@@ -121,6 +128,7 @@ export function normalizeProfile(raw: unknown): Profile {
     coins: Math.max(0, Math.floor(Number(p.coins ?? base.coins)) || 0),
     owned: (p.owned ?? []).filter((id) => known.has(id)),
     skins: (p.skins ?? []).filter((id) => known.has(id.split(':')[0])),
+    eggs: [...new Set((p.eggs ?? []).filter((id) => EGGS.some((e) => e.id === id && e.price > 0)))],
     equipped: { ...base.equipped, ...(p.equipped ?? {}) },
     stats: { ...base.stats, ...(p.stats ?? {}) },
     day: { ...base.day, ...(p.day ?? {}) },

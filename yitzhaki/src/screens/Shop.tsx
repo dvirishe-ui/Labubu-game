@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { CharacterView } from '../components/CharacterView';
 import { CoinPill, fmt, Price } from '../components/Coins';
+import { EggCard } from '../components/Eggs';
 import { Screen, TopBar } from '../components/ui';
+import { EGGS, hasEgg } from '../lib/eggs';
 import { CHARACTERS, skinsFor, TIER_META, type Tier } from '../lib/characters';
 import { nextGoal } from '../lib/economy';
 import { useProfile } from '../lib/store';
@@ -87,6 +89,22 @@ export default function Shop({ onBack }: { onBack: () => void }) {
         {middle.map((c) => card(c.id))}
         {card(starter.id, 'starter')}
       </div>
+      <section className="mt-8" aria-labelledby="eggs-title">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 id="eggs-title" className="font-display text-2xl text-white">
+            🥚 איסטר אגים
+          </h2>
+          <span className="text-sm text-ink-400">
+            {EGGS.filter((e) => hasEgg(p, e.id)).length}/{EGGS.length}
+          </span>
+        </div>
+        <p className="mb-3 text-sm text-ink-400">כל איסטר אג פותח כוח במסלול של יצחקי — בלעדיהם אין כוחות. קונים כל אחד לבד, לא משנה איזו דמות יש לך.</p>
+        <div className="space-y-2">
+          {EGGS.map((e) => (
+            <EggCard key={e.id} egg={e} />
+          ))}
+        </div>
+      </section>
       <section className="card mt-6 p-4 text-sm text-ink-400">
         <p className="mb-2 font-bold text-ink-200">דרגות סקינים</p>
         <div className="flex flex-wrap gap-2">
